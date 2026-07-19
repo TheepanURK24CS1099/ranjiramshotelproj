@@ -22,11 +22,15 @@ Completed so far:
 - pnpm monorepo setup
 - Next.js frontend setup
 - Initial responsive foundation page
+- Express API foundation setup
+- Health endpoint foundation
+- Environment validation foundation
+- Structured logging foundation
+- Central error handling foundation
 - Production-oriented repository structure
 
 Not implemented yet:
 
-- Express API
 - PostgreSQL schema
 - Authentication
 - Employee management
@@ -122,7 +126,7 @@ infrastructure/
 
 ## Local Prerequisites
 
-- Node.js 24 or compatible supported version
+- Node.js 24 (the supported development and production baseline)
 - Corepack
 - pnpm 11
 - PostgreSQL client/server for later backend work
@@ -147,14 +151,27 @@ Local URL:
 
 http://localhost:3020
 
+## Running the API
+
+```bash
+corepack pnpm --filter @hotel/api dev
+```
+
+API health endpoint:
+
+http://127.0.0.1:3022/health
+
 ## Available Root Commands
 
 - dev:web
+- dev:api
 - build:web
+- build:api
 - build
 - lint
 - typecheck
 - test
+- test:api
 
 ## Development Workflow
 
