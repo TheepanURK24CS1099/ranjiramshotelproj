@@ -5,10 +5,13 @@
   "packageManager": "pnpm@11.15.0",
   "scripts": {
     "dev:web": "pnpm --filter @hotel/web dev",
+    "dev:api": "pnpm --filter @hotel/api dev",
     "build:web": "pnpm --filter @hotel/web build",
+    "build:api": "pnpm --filter @hotel/api build",
     "build": "pnpm -r --if-present run build",
     "lint": "pnpm -r --if-present run lint",
     "typecheck": "pnpm -r --if-present run typecheck",
-    "test": "pnpm -r --if-present run test"
+    "test": "pnpm -r --if-present run test",
+    "test:api": "pnpm --filter @hotel/api test"
   }
 }
