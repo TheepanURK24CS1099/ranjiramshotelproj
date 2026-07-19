@@ -1,0 +1,14 @@
+{
+  "name": "ranjirams-hotel-project",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.15.0",
+  "scripts": {
+    "dev:web": "pnpm --filter @hotel/web dev",
+    "build:web": "pnpm --filter @hotel/web build",
+    "build": "pnpm -r --if-present run build",
+    "lint": "pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test"
+  }
+}
