@@ -15,12 +15,16 @@
     "db:check": "tsx src/scripts/check-database.ts",
     "db:migrate": "tsx src/scripts/migrate.ts up",
     "db:migrate:status": "tsx src/scripts/migrate.ts status",
-    "db:migrate:down": "tsx src/scripts/migrate.ts down"
+    "db:migrate:down": "tsx src/scripts/migrate.ts down",
+    "auth:create-admin": "tsx src/scripts/auth-create-admin.ts"
   },
   "dependencies": {
+    "argon2": "0.45.0",
+    "cookie-parser": "1.4.7",
     "cors": "2.8.6",
     "dotenv": "17.4.2",
     "express": "5.2.1",
+    "express-rate-limit": "8.6.0",
     "helmet": "8.3.0",
     "pg": "8.22.0",
     "pino": "10.3.1",
@@ -29,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
+    "@types/cookie-parser": "1.4.10",
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",
     "@types/node": "^24.0.0",

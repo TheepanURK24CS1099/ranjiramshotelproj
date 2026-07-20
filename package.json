@@ -15,6 +15,7 @@
     "test:api": "pnpm --filter @hotel/api test",
     "db:check": "pnpm --filter @hotel/api db:check",
     "db:migrate": "pnpm --filter @hotel/api run db:migrate",
-    "db:migrate:status": "pnpm --filter @hotel/api run db:migrate:status"
+    "db:migrate:status": "pnpm --filter @hotel/api run db:migrate:status",
+    "auth:create-admin": "pnpm --filter @hotel/api run auth:create-admin"
   }
 }
