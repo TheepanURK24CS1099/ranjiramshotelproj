@@ -27,17 +27,22 @@ Completed so far:
 - Environment validation foundation
 - Structured logging foundation
 - Central error handling foundation
+- PostgreSQL pool foundation
+- Validated database configuration
+- `/ready` endpoint
+- Graceful pool shutdown
+- Database check command
 - Production-oriented repository structure
 
-Not implemented yet:
+Pending implementation:
 
-- PostgreSQL schema
+- Schema and migrations
 - Authentication
-- Employee management
-- Shift management
-- Attendance engine
-- Salary calculation
-- Advance-payment module
+- Employees
+- Shifts
+- Attendance and ADMS
+- Salary and advances
+- Reports
 
 ## Planned Client Modules
 
@@ -161,6 +166,10 @@ API health endpoint:
 
 http://127.0.0.1:3022/health
 
+API readiness endpoint:
+
+http://127.0.0.1:3022/ready
+
 ## Available Root Commands
 
 - dev:web
@@ -172,6 +181,7 @@ http://127.0.0.1:3022/health
 - typecheck
 - test
 - test:api
+- db:check
 
 ## Development Workflow
 
