@@ -36,7 +36,7 @@ export default function EmployeesListPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold">Employees</h1>
-        <Link href="/employees/new" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        <Link href="/employees/new" className="px-4 py-2 bg-[#028174] text-white rounded hover:bg-[#026c61]">
           Add Employee
         </Link>
       </div>
@@ -78,7 +78,7 @@ export default function EmployeesListPage() {
                 <td className="p-4 font-medium">{String(emp.name)}</td>
                 <td className="p-4">{String(emp.department || "-")}</td>
                 <td className="p-4">
-                  <span className={`px-2 py-1 text-xs rounded-full ${emp.active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                  <span className={`px-2 py-1 text-xs rounded-full ${emp.active ? "bg-green-100 text-green-800" : "bg-[#FFE3B3] text-[#7C4A03]"}`}>
                     {emp.active ? "Active" : "Inactive"}
                   </span>
                 </td>
@@ -103,14 +103,14 @@ export default function EmployeesListPage() {
             <button 
               disabled={page <= 1} 
               onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1 border rounded disabled:opacity-50"
+              className="px-3 py-1 border rounded disabled:bg-[#E5E7EB] disabled:text-[#64748B] disabled:opacity-100 disabled:border-transparent"
             >
               Previous
             </button>
             <button 
               disabled={employees.length < 20} 
               onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1 border rounded disabled:opacity-50"
+              className="px-3 py-1 border rounded disabled:bg-[#E5E7EB] disabled:text-[#64748B] disabled:opacity-100 disabled:border-transparent"
             >
               Next
             </button>

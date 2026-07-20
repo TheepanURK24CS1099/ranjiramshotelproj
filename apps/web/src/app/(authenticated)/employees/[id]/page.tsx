@@ -113,7 +113,7 @@ export default function EditEmployeePage() {
           <h1 className="text-2xl font-semibold">Edit Employee: {employee.name}</h1>
           <button 
             onClick={handleToggleStatus}
-            className={`px-4 py-2 text-white rounded ${employee.active ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}`}
+            className={`px-4 py-2 text-white rounded ${employee.active ? "bg-[#DC2626] hover:bg-[#B91C1C]" : "bg-[#0AB68B] hover:bg-[#089774]"}`}
           >
             {employee.active ? "Deactivate Employee" : "Activate Employee"}
           </button>
@@ -153,8 +153,8 @@ export default function EditEmployeePage() {
             </div>
           </div>
           <div className="flex justify-end space-x-4">
-            <button type="button" onClick={() => router.back()} className="px-4 py-2 border rounded hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+            <button type="button" onClick={() => router.back()} className="px-4 py-2 bg-white text-[#1F2937] border border-[#CBD5E1] rounded hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 bg-[#028174] text-white rounded hover:bg-[#026c61] disabled:bg-[#E5E7EB] disabled:text-[#64748B] disabled:opacity-100 disabled:border-transparent">
               {loading ? "Saving..." : "Save Changes"}
             </button>
           </div>
@@ -179,7 +179,7 @@ export default function EditEmployeePage() {
               <label className="block text-sm font-medium text-gray-700">Effective From</label>
               <input type="date" required value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} className="w-full px-3 py-2 mt-1 border rounded bg-white" />
             </div>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Assign</button>
+            <button type="submit" className="px-4 py-2 bg-[#028174] text-white rounded hover:bg-[#026c61]">Assign</button>
           </div>
         </form>
 
