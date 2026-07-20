@@ -1,0 +1,12 @@
+import { Router } from "express";
+import { requireAuth, requireRole } from "../auth/auth.middleware.js";
+import * as controller from "./devices.controller.js";
+const router=Router();
+router.get("/",requireAuth,requireRole("ADMIN","MANAGER"),controller.list);
+router.get("/:id/recent-punches",requireAuth,requireRole("ADMIN","MANAGER"),controller.recent);
+router.get("/:id",requireAuth,requireRole("ADMIN","MANAGER"),controller.get);
+router.post("/",requireAuth,requireRole("ADMIN"),controller.create);
+router.patch("/:id",requireAuth,requireRole("ADMIN"),controller.update);
+router.patch("/:id/activate",requireAuth,requireRole("ADMIN"),controller.activate);
+router.patch("/:id/deactivate",requireAuth,requireRole("ADMIN"),controller.deactivate);
+export default router;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
+import { formatShiftTime } from "@/lib/format";
 
 export default function ShiftsListPage() {
   const [shifts, setShifts] = useState<Record<string, string | number | boolean>[]>([]);
@@ -69,7 +70,7 @@ export default function ShiftsListPage() {
                   {shift.name} 
                   {shift.is_overnight && <span className="ml-2 text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">Overnight</span>}
                 </td>
-                <td className="p-4">{shift.start_time} - {shift.end_time}</td>
+                <td className="p-4">{formatShiftTime(shift.start_time)} – {formatShiftTime(shift.end_time)}</td>
                 <td className="p-4">{shift.grace_minutes}</td>
                 <td className="p-4">
                   <span className={`px-2 py-1 text-xs rounded-full ${shift.active ? "bg-green-100 text-green-800" : "bg-[#FFE3B3] text-[#7C4A03]"}`}>

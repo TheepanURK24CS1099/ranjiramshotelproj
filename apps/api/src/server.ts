@@ -4,6 +4,7 @@ import app from "./app.js";
 import { env } from "./config/environment.js";
 import { logger } from "./config/logger.js";
 import { closeDatabasePool } from "./infrastructure/database/database.js";
+import { startDeviceStatusMonitor, stopDeviceStatusMonitor } from "./modules/devices/device-status.service.js";
 
 const serviceName = "hotel-api";
 
@@ -34,6 +35,7 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
     if (server !== undefined) {
       await closeServer(server);
     }
+    stopDeviceStatusMonitor();
 
     await closeDatabasePool();
 
@@ -46,6 +48,7 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
 }
 
 function startServer(): void {
+  startDeviceStatusMonitor();
   server = createServer(app);
 
   server.once("error", (error) => {

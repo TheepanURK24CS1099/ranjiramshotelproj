@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
+import { formatDateTime } from "@/lib/format";
 
 interface DashboardSummary {
   totalEmployees: number;
@@ -14,10 +15,11 @@ interface DashboardSummary {
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState("");
+  const [device, setDevice] = useState<Record<string, string | boolean | null> | null>(null);
 
   useEffect(() => {
-    apiClient.get("/dashboard/summary")
-      .then((data) => setSummary(data))
+    Promise.all([apiClient.get("/dashboard/summary"), apiClient.get("/devices")])
+      .then(([data, devices]) => { setSummary(data); setDevice((devices as Record<string, string | boolean | null>[])[0] ?? null); })
       .catch(() => setError("Failed to load dashboard data"));
   }, []);
 
@@ -34,20 +36,23 @@ export default function DashboardPage() {
         </div>
         <div className="bg-white p-6 rounded shadow">
           <div className="text-gray-500 text-sm font-medium uppercase">Active Employees</div>
-          <div className="mt-2 text-3xl font-semibold text-green-600">{summary.activeEmployees}</div>
+          <div className="mt-2 text-3xl font-semibold text-[#1F2937]">{summary.activeEmployees}</div>
         </div>
         <div className="bg-white p-6 rounded shadow">
           <div className="text-gray-500 text-sm font-medium uppercase">Inactive Employees</div>
-          <div className="mt-2 text-3xl font-semibold text-red-600">{summary.inactiveEmployees}</div>
+          <div className="mt-2 text-3xl font-semibold text-[#1F2937]">{summary.inactiveEmployees}</div>
         </div>
         <div className="bg-white p-6 rounded shadow">
           <div className="text-gray-500 text-sm font-medium uppercase">Active Shifts</div>
-          <div className="mt-2 text-3xl font-semibold text-blue-600">{summary.activeShifts}</div>
+          <div className="mt-2 text-3xl font-semibold text-[#1F2937]">{summary.activeShifts}</div>
         </div>
         <div className="bg-white p-6 rounded shadow">
           <div className="text-gray-500 text-sm font-medium uppercase">No Current Shift</div>
-          <div className="mt-2 text-3xl font-semibold text-orange-600">{summary.employeesWithoutCurrentShift}</div>
+          <div className="mt-2 text-3xl font-semibold text-[#1F2937]">{summary.employeesWithoutCurrentShift}</div>
         </div>
+        <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Biometric Device Status</div><div className="mt-2"><span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold text-white ${device?.status === "ONLINE" ? "bg-[#0AB68B]" : "bg-[#DC2626]"}`}>{device?.status ?? "OFFLINE"}</span></div></div>
+        <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Last Device Sync</div><div className="mt-2 text-xl font-semibold text-[#1F2937]">{formatDateTime(device?.last_seen as string | null)}</div></div>
+        <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Last Raw Punch Received</div><div className="mt-2 text-xl font-semibold text-[#1F2937]">{formatDateTime(device?.last_raw_punch_received as string | null)}</div></div>
       </div>
     </div>
   );

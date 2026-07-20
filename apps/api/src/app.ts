@@ -9,6 +9,7 @@ import { errorHandler } from "./common/middleware/error-handler.js";
 import { notFoundMiddleware } from "./common/middleware/not-found.js";
 import { requestIdMiddleware } from "./common/middleware/request-id.js";
 import routes from "./routes/index.js";
+import admsRoutes from "./modules/adms/adms.routes.js";
 
 const app = express();
 
@@ -25,6 +26,8 @@ app.use(
     credentials: true,
   }),
 );
+// Device-facing protocol routes have their own strict raw text parser.
+app.use("/iclock", admsRoutes);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());

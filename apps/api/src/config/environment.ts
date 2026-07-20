@@ -136,6 +136,10 @@ const environmentSchema = z.object({
     parseInteger,
     z.number().int().min(1).default(100), // 100 requests per window
   ),
+  DEVICE_OFFLINE_THRESHOLD_MS: z.preprocess(parseInteger, z.number().int().min(1000).default(5 * 60 * 1000)),
+  DEVICE_STATUS_CHECK_INTERVAL_MS: z.preprocess(parseInteger, z.number().int().min(1000).default(60 * 1000)),
+  ADMS_BODY_LIMIT: z.string().regex(/^\d+(b|kb|mb)$/i).default("64kb"),
+  ADMS_TIMEZONE_OFFSET: z.string().regex(/^[+-](0\d|1[0-4]):[0-5]\d$/).default("+05:30"),
 });
 
 export function parseEnvironment(input: Record<string, unknown>) {
