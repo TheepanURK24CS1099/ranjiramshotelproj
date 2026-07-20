@@ -10,6 +10,10 @@ interface DashboardSummary {
   inactiveEmployees: number;
   activeShifts: number;
   employeesWithoutCurrentShift: number;
+  presentToday: number;
+  currentlyCheckedIn: number;
+  missingPunchOut: number;
+  unmatchedPunches: number;
 }
 
 export default function DashboardPage() {
@@ -53,6 +57,10 @@ export default function DashboardPage() {
         <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Biometric Device Status</div><div className="mt-2"><span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold text-white ${device?.status === "ONLINE" ? "bg-[#0AB68B]" : "bg-[#DC2626]"}`}>{device?.status ?? "OFFLINE"}</span></div></div>
         <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Last Device Sync</div><div className="mt-2 text-xl font-semibold text-[#1F2937]">{formatDateTime(device?.last_seen as string | null)}</div></div>
         <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Last Raw Punch Received</div><div className="mt-2 text-xl font-semibold text-[#1F2937]">{formatDateTime(device?.last_raw_punch_received as string | null)}</div></div>
+        <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Present Today</div><div className="mt-2 text-3xl font-semibold text-[#1F2937]">{summary.presentToday}</div></div>
+        <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Currently Checked In</div><div className="mt-2 text-3xl font-semibold text-[#1F2937]">{summary.currentlyCheckedIn}</div></div>
+        <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Missing Punch Out</div><div className="mt-2 text-3xl font-semibold text-[#1F2937]">{summary.missingPunchOut}</div></div>
+        <div className="bg-white p-6 rounded shadow"><div className="text-gray-500 text-sm font-medium uppercase">Unmatched Punches</div><div className="mt-2 text-3xl font-semibold text-[#1F2937]">{summary.unmatchedPunches}</div></div>
       </div>
     </div>
   );
