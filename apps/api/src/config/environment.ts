@@ -115,6 +115,27 @@ const environmentSchema = z.object({
   ),
   DB_SSL: z.preprocess(parseBoolean, z.boolean().default(false)),
   DB_SSL_REJECT_UNAUTHORIZED: z.preprocess(parseBoolean, z.boolean().default(true)),
+  SESSION_COOKIE_NAME: z.string().default("hotel_session"),
+  SESSION_DURATION_MS: z.preprocess(
+    parseInteger,
+    z.number().int().min(1000).default(24 * 60 * 60 * 1000), // 24 hours
+  ),
+  MAX_FAILED_ATTEMPTS: z.preprocess(
+    parseInteger,
+    z.number().int().min(1).default(5),
+  ),
+  LOCK_DURATION_MS: z.preprocess(
+    parseInteger,
+    z.number().int().min(1000).default(15 * 60 * 1000), // 15 mins
+  ),
+  LOGIN_RATE_LIMIT_WINDOW_MS: z.preprocess(
+    parseInteger,
+    z.number().int().min(1000).default(15 * 60 * 1000), // 15 mins
+  ),
+  LOGIN_RATE_LIMIT_MAX: z.preprocess(
+    parseInteger,
+    z.number().int().min(1).default(100), // 100 requests per window
+  ),
 });
 
 export function parseEnvironment(input: Record<string, unknown>) {

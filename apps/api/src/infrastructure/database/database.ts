@@ -18,7 +18,7 @@ function createDatabasePoolConfig(): DatabasePoolConfig {
   };
 }
 
-function getDatabasePool(): Pool {
+export function getDatabasePool(): Pool {
   if (databasePool === undefined) {
     databasePool = new Pool(createDatabasePoolConfig());
 
