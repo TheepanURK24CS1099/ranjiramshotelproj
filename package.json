@@ -13,6 +13,8 @@
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
     "test:api": "pnpm --filter @hotel/api test",
-    "db:check": "pnpm --filter @hotel/api db:check"
+    "db:check": "pnpm --filter @hotel/api db:check",
+    "db:migrate": "pnpm --filter @hotel/api run db:migrate",
+    "db:migrate:status": "pnpm --filter @hotel/api run db:migrate:status"
   }
 }
