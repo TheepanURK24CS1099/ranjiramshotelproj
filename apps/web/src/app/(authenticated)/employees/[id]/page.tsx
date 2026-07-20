@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { formatShiftTime } from "@/lib/format";
 
 export default function EditEmployeePage() {
   const router = useRouter();
@@ -172,7 +173,7 @@ export default function EditEmployeePage() {
               <label className="block text-sm font-medium text-gray-700">Shift</label>
               <select required value={shiftId} onChange={e => setShiftId(e.target.value)} className="w-full px-3 py-2 mt-1 border rounded bg-white">
                 <option value="">Select a shift...</option>
-                {shifts.map(s => <option key={String(s.id)} value={String(s.id)}>{String(s.name)} ({String(s.start_time)} - {String(s.end_time)})</option>)}
+                {shifts.map(s => <option key={String(s.id)} value={String(s.id)}>{String(s.name)} ({formatShiftTime(s.start_time)} – {formatShiftTime(s.end_time)})</option>)}
               </select>
             </div>
             <div className="flex-1">
