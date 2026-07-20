@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import app from "./app.js";
 import { env } from "./config/environment.js";
 import { logger } from "./config/logger.js";
+import { closeDatabasePool } from "./infrastructure/database/database.js";
 
 const serviceName = "hotel-api";
 
@@ -33,6 +34,8 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
     if (server !== undefined) {
       await closeServer(server);
     }
+
+    await closeDatabasePool();
 
     logger.info({ service: serviceName, reason }, "API shutdown complete");
     process.exit(exitCode);
