@@ -47,7 +47,7 @@ export default function LoginPage() {
             <input
               type="email"
               required
-              className="w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-[#028174] focus:border-blue-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -58,7 +58,7 @@ export default function LoginPage() {
             <input
               type="password"
               required
-              className="w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-[#028174] focus:border-blue-500"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -67,7 +67,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-2 font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            className="w-full px-4 py-2 font-medium text-white bg-blue-600 rounded-md hover:bg-[#026c61] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#028174] disabled:bg-[#E5E7EB] disabled:text-[#64748B] disabled:opacity-100 disabled:border-transparent"
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>

@@ -18,7 +18,7 @@ async function handleResponse(response: Response) {
 
   if (!response.ok) {
     if (response.status === 401) {
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
         window.location.href = "/login";
       }
     }
