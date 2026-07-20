@@ -7,6 +7,7 @@ import dashboardRoutes from "../modules/dashboard/dashboard.routes.js";
 import shiftsRoutes from "../modules/shifts/shifts.routes.js";
 import employeesRoutes from "../modules/employees/employees.routes.js";
 import devicesRoutes from "../modules/devices/devices.routes.js";
+import attendanceRoutes from "../modules/attendance/attendance.routes.js";
 
 const router = Router();
 
@@ -16,6 +17,7 @@ router.use("/dashboard", dashboardRoutes);
 router.use("/shifts", shiftsRoutes);
 router.use("/employees", employeesRoutes);
 router.use("/devices", devicesRoutes);
+router.use("/attendance", attendanceRoutes);
 router.get("/ready", getReady);
 
 export default router;
