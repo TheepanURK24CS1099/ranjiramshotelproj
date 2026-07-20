@@ -2,14 +2,14 @@
 exports.up = (pgm) => {
   // Alter app_users
   pgm.sql(`
-    ALTER TABLE app_users 
+    ALTER TABLE app_users
       ADD COLUMN last_login_at timestamptz,
       ADD COLUMN failed_login_attempts integer NOT NULL DEFAULT 0,
       ADD COLUMN locked_until timestamptz;
   `);
 
   pgm.sql(`
-    ALTER TABLE app_users 
+    ALTER TABLE app_users
       ADD CONSTRAINT app_users_role_check CHECK (role IN ('ADMIN', 'MANAGER'));
   `);
 
@@ -35,11 +35,11 @@ exports.up = (pgm) => {
 
 exports.down = (pgm) => {
   pgm.sql("DROP TABLE IF EXISTS auth_sessions;");
-  
+
   pgm.sql("ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check;");
-  
+
   pgm.sql(`
-    ALTER TABLE app_users 
+    ALTER TABLE app_users
       DROP COLUMN IF EXISTS last_login_at,
       DROP COLUMN IF EXISTS failed_login_attempts,
       DROP COLUMN IF EXISTS locked_until;
