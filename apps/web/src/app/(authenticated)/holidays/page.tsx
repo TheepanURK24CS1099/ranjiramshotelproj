@@ -40,6 +40,8 @@ export default function HolidaysPage() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<"delete" | "deactivate" | null>(null);
 
   useEffect(() => {
     void Promise.all([apiClient.get("/holidays"), apiClient.get("/auth/me")])
@@ -126,6 +128,7 @@ export default function HolidaysPage() {
       setDeleting(false);
     }
   };
+  const runBulk = async () => { if(!bulkAction)return;setDeleting(true);try{const result=bulkAction==="delete"?await apiClient.delete("/holidays/bulk",{body:JSON.stringify({ids:selectedIds}),headers:{"Content-Type":"application/json"}}):await apiClient.patch("/holidays/bulk-status",{ids:selectedIds,active:false});setSuccess(`${bulkAction==="delete"?"Deleted":"Deactivated"} ${(result as {deleted?:number;updated?:number}).deleted??(result as {updated?:number}).updated??0} selected holiday(s).`);setSelectedIds([]);setRows(await apiClient.get("/holidays") as Holiday[]);}catch(e){setError(errorMessage(e,"Unable to update selected holidays."));}finally{setDeleting(false);setBulkAction(null);}};
 
   return (
     <div className="space-y-6">
@@ -184,9 +187,11 @@ export default function HolidaysPage() {
       )}
 
       <div className="overflow-hidden rounded bg-white shadow">
+        {isAdmin&&<div className="p-3 border-b flex gap-2 text-sm"><span>{selectedIds.length} selected</span><button disabled={!selectedIds.length||deleting} onClick={()=>setBulkAction("delete")} className="border px-2 py-1 disabled:opacity-50">Delete Selected Holidays</button><button disabled={!selectedIds.length||deleting} onClick={()=>setBulkAction("deactivate")} className="border px-2 py-1">Deactivate Selected</button><button disabled={!selectedIds.length} onClick={()=>setSelectedIds([])} className="border px-2 py-1">Clear Selection</button></div>}
         <table className="w-full text-left">
           <thead className="bg-gray-50">
             <tr>
+              {isAdmin&&<th className="p-3"><input aria-label="Select all holidays" type="checkbox" checked={rows.length>0&&rows.every(row=>selectedIds.includes(row.id))} onChange={()=>setSelectedIds(rows.every(row=>selectedIds.includes(row.id))?[]:rows.map(row=>row.id))}/></th>}
               <th className="p-3">Date</th>
               <th className="p-3">Name</th>
               <th className="p-3">Description</th>
@@ -197,6 +202,7 @@ export default function HolidaysPage() {
           <tbody>
             {rows.map((holiday) => (
               <tr key={holiday.id} className="border-t">
+                {isAdmin&&<td className="p-3"><input aria-label={`Select ${holiday.name}`} type="checkbox" checked={selectedIds.includes(holiday.id)} onChange={()=>setSelectedIds(current=>current.includes(holiday.id)?current.filter(id=>id!==holiday.id):[...current,holiday.id])}/></td>}
                 <td className="p-3">{holiday.holiday_date.slice(0, 10)}</td>
                 <td className="p-3 font-medium">{holiday.name}</td>
                 <td className="p-3 text-gray-600">{holiday.description || "—"}</td>
@@ -215,7 +221,7 @@ export default function HolidaysPage() {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={isAdmin ? 5 : 4} className="p-4 text-center text-gray-500">No holidays found.</td></tr>
+              <tr><td colSpan={isAdmin ? 6 : 4} className="p-4 text-center text-gray-500">No holidays found.</td></tr>
             )}
           </tbody>
         </table>
@@ -228,6 +234,7 @@ export default function HolidaysPage() {
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => void deleteHoliday()}
       />
+      <ConfirmationModal open={bulkAction!==null} pending={deleting} recordName="selected holidays" title={bulkAction==="delete"?"Delete selected holidays?":"Deactivate selected holidays?"} message={bulkAction==="delete"?"Holidays used by historical attendance will remain protected.":"Deactivated holidays remain in historical records."} confirmLabel={bulkAction==="delete"?"Delete Selected":"Deactivate"} onCancel={()=>setBulkAction(null)} onConfirm={()=>void runBulk()}/>
     </div>
   );
 }

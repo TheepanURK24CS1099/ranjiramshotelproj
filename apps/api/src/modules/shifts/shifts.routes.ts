@@ -8,6 +8,9 @@ const router = Router();
 router.get("/", requireAuth, requireRole("ADMIN", "MANAGER"), shiftsController.getShifts);
 router.get("/:id", requireAuth, requireRole("ADMIN", "MANAGER"), shiftsController.getShiftById);
 
+router.patch("/bulk-status", requireAuth, requireRole("ADMIN"), shiftsController.bulkStatus);
+router.delete("/bulk-unused", requireAuth, requireRole("ADMIN"), shiftsController.bulkDeleteUnused);
+
 // Only ADMIN can create/update
 router.post("/", requireAuth, requireRole("ADMIN"), shiftsController.createShift);
 router.patch("/:id", requireAuth, requireRole("ADMIN"), shiftsController.updateShift);

@@ -1,0 +1,23 @@
+import { Router } from "express";
+import { requireAuth, requireRole } from "../auth/auth.middleware.js";
+import * as controller from "./payroll.controller.js";
+import { requirePayrollEnabled } from "./payroll.guard.js";
+
+const router = Router();
+router.use(requireAuth);
+router.get("/periods", requireRole("ADMIN", "MANAGER"), controller.listPeriods);
+router.get("/periods/:id", requireRole("ADMIN", "MANAGER"), controller.getPeriod);
+router.delete("/periods/bulk-drafts", requireRole("ADMIN"), requirePayrollEnabled, controller.deleteDrafts);
+router.post("/periods", requireRole("ADMIN", "MANAGER"), requirePayrollEnabled, controller.createPeriod);
+router.post("/periods/:id/generate", requireRole("ADMIN", "MANAGER"), requirePayrollEnabled, controller.generate);
+router.post("/periods/:id/recalculate", requireRole("ADMIN", "MANAGER"), requirePayrollEnabled, controller.recalculate);
+router.post("/periods/:id/lock", requireRole("ADMIN"), requirePayrollEnabled, controller.lock);
+router.post("/periods/:id/cancel", requireRole("ADMIN"), requirePayrollEnabled, controller.cancel);
+router.get("/periods/:id/records", requireRole("ADMIN", "MANAGER"), controller.listRecords);
+router.get("/records/:recordId", requireRole("ADMIN", "MANAGER"), controller.getRecord);
+router.patch("/records/:recordId", requireRole("ADMIN", "MANAGER"), requirePayrollEnabled, controller.updateRecord);
+router.patch("/records/:recordId/status", requireRole("ADMIN", "MANAGER"), requirePayrollEnabled, controller.updateRecordStatus);
+router.post("/records/:recordId/deductions", requireRole("ADMIN", "MANAGER"), requirePayrollEnabled, controller.addDeduction);
+router.patch("/records/:recordId/deductions/:deductionId", requireRole("ADMIN", "MANAGER"), requirePayrollEnabled, controller.updateDeduction);
+router.delete("/records/:recordId/deductions/:deductionId", requireRole("ADMIN", "MANAGER"), requirePayrollEnabled, controller.deleteDeduction);
+export default router;

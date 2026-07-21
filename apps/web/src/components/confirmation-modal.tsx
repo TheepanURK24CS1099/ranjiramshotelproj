@@ -3,6 +3,9 @@
 interface ConfirmationModalProps {
   open: boolean;
   recordName: string;
+  title?: string;
+  message?: string;
+  confirmLabel?: string;
   pending?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -11,6 +14,9 @@ interface ConfirmationModalProps {
 export function ConfirmationModal({
   open,
   recordName,
+  title,
+  message,
+  confirmLabel,
   pending = false,
   onCancel,
   onConfirm,
@@ -32,10 +38,10 @@ export function ConfirmationModal({
         role="dialog"
       >
         <h2 id="permanent-delete-title" className="text-xl font-semibold text-gray-900">
-          Delete {recordName} permanently?
+          {title ?? `Delete ${recordName} permanently?`}
         </h2>
         <p className="mt-3 text-sm text-gray-600">
-          Permanent deletion cannot be undone. Historical records may prevent this record from being deleted.
+          {message ?? "Permanent deletion cannot be undone. Historical records may prevent this record from being deleted."}
         </p>
         <div className="mt-6 flex justify-end gap-3">
           <button
@@ -52,7 +58,7 @@ export function ConfirmationModal({
             onClick={onConfirm}
             className="rounded bg-[#DC2626] px-4 py-2 text-white hover:bg-[#B91C1C] disabled:opacity-60"
           >
-            {pending ? "Deleting..." : "Delete Permanently"}
+            {pending ? "Saving..." : (confirmLabel ?? "Delete Permanently")}
           </button>
         </div>
       </div>

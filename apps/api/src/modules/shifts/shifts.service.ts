@@ -31,3 +31,5 @@ export async function updateShiftStatus(id: string, active: boolean): Promise<Sh
   return await shiftsRepository.updateShiftStatus(id, active);
 }
 export async function deleteShiftIfUnused(id: string): Promise<boolean> { return await shiftsRepository.deleteShiftIfUnused(id); }
+export async function bulkShiftStatus(ids:string[],active:boolean){return {updated:await shiftsRepository.bulkStatus(ids,active)};}
+export async function deleteUnusedShifts(ids:string[]){return {deleted:await shiftsRepository.deleteUnused(ids)};}

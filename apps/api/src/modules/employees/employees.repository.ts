@@ -179,7 +179,7 @@ export async function updateEmployeeStatus(id: string, active: boolean): Promise
 }
 
 export async function deleteEmployeeIfUnused(id: string): Promise<boolean> {
-  const history = await pool.query("SELECT 1 FROM daily_attendance_records WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_shift_assignments WHERE employee_id=$1 UNION ALL SELECT 1 FROM salary_history WHERE employee_id=$1 UNION ALL SELECT 1 FROM advance_transactions WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_salary_history WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_advance_transactions WHERE employee_id=$1 LIMIT 1", [id]);
+  const history = await pool.query("SELECT 1 FROM daily_attendance_records WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_shift_assignments WHERE employee_id=$1 UNION ALL SELECT 1 FROM salary_history WHERE employee_id=$1 UNION ALL SELECT 1 FROM advance_transactions WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_salary_history WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_advance_transactions WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_payroll_records WHERE employee_id=$1 UNION ALL SELECT 1 FROM payroll_deductions d JOIN employee_payroll_records r ON r.id=d.payroll_record_id WHERE r.employee_id=$1 LIMIT 1", [id]);
   if (history.rowCount) throw new Error("Cannot delete this employee because historical records exist. Deactivate the employee instead.");
   return (await pool.query("DELETE FROM employees WHERE id=$1 RETURNING id", [id])).rowCount === 1;
 }
