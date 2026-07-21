@@ -160,6 +160,12 @@ export async function updateEmployeeStatus(id: string, active: boolean): Promise
   return result.rows[0] || null;
 }
 
+export async function deleteEmployeeIfUnused(id: string): Promise<boolean> {
+  const history = await pool.query("SELECT 1 FROM daily_attendance_records WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_shift_assignments WHERE employee_id=$1 UNION ALL SELECT 1 FROM salary_history WHERE employee_id=$1 UNION ALL SELECT 1 FROM advance_transactions WHERE employee_id=$1 LIMIT 1", [id]);
+  if (history.rowCount) throw new Error("Cannot delete this employee because historical records exist. Deactivate the employee instead.");
+  return (await pool.query("DELETE FROM employees WHERE id=$1 RETURNING id", [id])).rowCount === 1;
+}
+
 export async function getEmployeeShiftAssignments(employeeId: string): Promise<ShiftAssignment[]> {
   const result = await pool.query(
     `SELECT a.*, s.name as shift_name

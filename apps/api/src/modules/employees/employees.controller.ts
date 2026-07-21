@@ -96,6 +96,8 @@ export async function updateEmployeeStatus(req: Request, res: Response, next: Ne
   }
 }
 
+export async function deleteEmployee(req: Request, res: Response, next: NextFunction) { try { const deleted=await employeesService.deleteEmployeeIfUnused(req.params.id as string); if(!deleted){res.status(404).json({message:"Employee not found"});return;} res.status(204).end(); } catch(error){ if(error instanceof Error && error.message.startsWith("Cannot delete")){res.status(409).json({message:error.message});return;} next(error);} }
+
 export async function getEmployeeShiftAssignments(req: Request, res: Response, next: NextFunction) {
   try {
     const assignments = await employeesService.getEmployeeShiftAssignments(req.params.id as string);

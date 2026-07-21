@@ -8,6 +8,10 @@ export interface Shift {
   end_time: string;
   grace_minutes: number;
   minimum_work_minutes: number;
+  early_exit_tolerance_minutes: number;
+  checkin_before_minutes: number;
+  checkout_after_minutes: number;
+  weekly_off_days: number[];
   is_overnight: boolean;
   active: boolean;
   created_at: Date;
@@ -41,8 +45,8 @@ export async function getShiftByName(name: string): Promise<Shift | null> {
 
 export async function createShift(shift: Omit<Shift, "id" | "created_at" | "updated_at">): Promise<Shift> {
   const result = await pool.query(
-    `INSERT INTO shifts (name, start_time, end_time, grace_minutes, minimum_work_minutes, is_overnight, active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO shifts (name, start_time, end_time, grace_minutes, minimum_work_minutes, early_exit_tolerance_minutes, checkin_before_minutes, checkout_after_minutes, weekly_off_days, is_overnight, active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING *`,
     [
       shift.name,
@@ -50,6 +54,10 @@ export async function createShift(shift: Omit<Shift, "id" | "created_at" | "upda
       shift.end_time,
       shift.grace_minutes,
       shift.minimum_work_minutes,
+      shift.early_exit_tolerance_minutes,
+      shift.checkin_before_minutes,
+      shift.checkout_after_minutes,
+      shift.weekly_off_days,
       shift.is_overnight,
       shift.active,
     ]
@@ -83,4 +91,10 @@ export async function updateShiftStatus(id: string, active: boolean): Promise<Sh
     [active, id]
   );
   return result.rows[0] || null;
+}
+
+export async function deleteShiftIfUnused(id: string): Promise<boolean> {
+  const history=await pool.query("SELECT 1 FROM employee_shift_assignments WHERE shift_id=$1 UNION ALL SELECT 1 FROM daily_attendance_records WHERE shift_id=$1 LIMIT 1",[id]);
+  if(history.rowCount) throw new Error("Cannot delete this shift because historical records exist. Deactivate the shift instead.");
+  return (await pool.query("DELETE FROM shifts WHERE id=$1 RETURNING id",[id])).rowCount===1;
 }

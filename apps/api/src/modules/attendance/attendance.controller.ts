@@ -1,12 +1,20 @@
 import type { NextFunction, Request, Response } from "express";
 
 import * as service from "./attendance.service.js";
-import { attendanceQuerySchema } from "./attendance.schema.js";
+import { attendanceQuerySchema, attendanceRebuildSchema } from "./attendance.schema.js";
 
 const IST_OFFSET_MS = 330 * 60_000;
 
 function currentIstDate(): string {
   return new Date(Date.now() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+export async function rebuildAttendance(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = attendanceRebuildSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ message: "Validation failed", errors: parsed.error.issues }); return; }
+    res.json(await service.rebuildAttendanceForAllActiveEmployees(parsed.data.date));
+  } catch (error) { next(error); }
 }
 
 export async function listAttendance(req: Request, res: Response, next: NextFunction): Promise<void> {

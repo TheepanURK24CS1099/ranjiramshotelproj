@@ -85,3 +85,4 @@ export async function updateShiftStatus(req: Request, res: Response, next: NextF
     next(error);
   }
 }
+export async function deleteShift(req: Request,res:Response,next:NextFunction) { try { const deleted=await shiftsService.deleteShiftIfUnused(req.params.id as string); if(!deleted){res.status(404).json({message:"Shift not found"});return;}res.status(204).end(); }catch(error){if(error instanceof Error&&error.message.startsWith("Cannot delete")){res.status(409).json({message:error.message});return;}next(error);} }

@@ -30,3 +30,4 @@ export async function updateShift(id: string, shiftData: Partial<Omit<Shift, "id
 export async function updateShiftStatus(id: string, active: boolean): Promise<Shift | null> {
   return await shiftsRepository.updateShiftStatus(id, active);
 }
+export async function deleteShiftIfUnused(id: string): Promise<boolean> { return await shiftsRepository.deleteShiftIfUnused(id); }

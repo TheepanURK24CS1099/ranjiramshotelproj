@@ -33,6 +33,7 @@ export async function updateEmployee(id: string, employeeData: Partial<Omit<Empl
 export async function updateEmployeeStatus(id: string, active: boolean): Promise<Employee | null> {
   return await employeesRepository.updateEmployeeStatus(id, active);
 }
+export async function deleteEmployeeIfUnused(id: string): Promise<boolean> { return await employeesRepository.deleteEmployeeIfUnused(id); }
 
 export async function getEmployeeShiftAssignments(employeeId: string): Promise<ShiftAssignment[]> {
   return await employeesRepository.getEmployeeShiftAssignments(employeeId);
