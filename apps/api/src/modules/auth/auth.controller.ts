@@ -10,22 +10,22 @@ export const authController = {
       const parsedBody = loginSchema.safeParse({ body: req.body });
 
       if (!parsedBody.success) {
-        res.status(401).json({ message: "Invalid email or password" });
+        res.status(401).json({ message: "Invalid username or password" });
         return;
       }
 
-      const { email, password } = parsedBody.data.body;
+      const { username, password } = parsedBody.data.body;
       const userAgent = req.headers["user-agent"] ?? undefined;
       const ipAddress = req.ip;
 
       const result = await authService.login(
-        { email, password },
+        { username, password },
         userAgent,
         ipAddress
       );
 
       if (!result) {
-        res.status(401).json({ message: "Invalid email or password" });
+        res.status(401).json({ message: "Invalid username or password" });
         return;
       }
 

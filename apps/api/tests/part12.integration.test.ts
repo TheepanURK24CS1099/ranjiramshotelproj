@@ -12,7 +12,8 @@ let adminCookie:string,managerCookie:string,deviceId:string;
 
 async function session(role:"ADMIN"|"MANAGER"){
  const email=`${marker}-${role.toLowerCase()}@test.invalid`;
- const user=(await pool.query("INSERT INTO app_users(email,password_hash,role,active) VALUES($1,'test-only',$2,true) RETURNING id",[email,role])).rows[0];
+ const username=`${marker}-${role.toLowerCase()}`;
+ const user=(await pool.query("INSERT INTO app_users(email,username,password_hash,role,active) VALUES($1,$2,'test-only',$3,true) RETURNING id",[email,username,role])).rows[0];
  const token=crypto.randomBytes(32).toString("base64url"),hash=crypto.createHash("sha256").update(token).digest("hex");
  await authRepository.createSession(user.id,hash,new Date(Date.now()+3600000),"part12-test","127.0.0.1");
  return `hotel_session=${token}`;

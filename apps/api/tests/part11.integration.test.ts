@@ -10,6 +10,8 @@ import { authRepository } from "../src/modules/auth/auth.repository.js";
 const marker = `part11-${crypto.randomUUID()}`;
 const adminEmail = `${marker}-admin@test.invalid`;
 const managerEmail = `${marker}-manager@test.invalid`;
+const adminUsername = `${marker}-admin`;
+const managerUsername = `${marker}-manager`;
 const shiftName = `${marker}-morning`;
 const employeeName = `${marker}-employee`;
 const biometricId = crypto.randomInt(20_000_000, 90_000_000);
@@ -33,15 +35,15 @@ describe("Dashboard & Shifts & Employees Integration", () => {
   beforeAll(async () => {
     // Create Admin
     const adminRes = await pool.query(
-      `INSERT INTO app_users (email, password_hash, role, active) VALUES ($1, $2, $3, $4) RETURNING id`,
-      [adminEmail, "hash", "ADMIN", true]
+      `INSERT INTO app_users (email, username, password_hash, role, active) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [adminEmail, adminUsername, "hash", "ADMIN", true]
     );
     adminId = adminRes.rows[0].id;
 
     // Create Manager
     const managerRes = await pool.query(
-      `INSERT INTO app_users (email, password_hash, role, active) VALUES ($1, $2, $3, $4) RETURNING id`,
-      [managerEmail, "hash", "MANAGER", true]
+      `INSERT INTO app_users (email, username, password_hash, role, active) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [managerEmail, managerUsername, "hash", "MANAGER", true]
     );
     managerId = managerRes.rows[0].id;
 

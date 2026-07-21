@@ -1,50 +1,61 @@
 import "dotenv/config";
+import { pathToFileURL } from "node:url";
+
 import argon2 from "argon2";
 import { z } from "zod";
 
 import { checkDatabaseConnection, closeDatabasePool } from "../infrastructure/database/database.js";
 import { authRepository } from "../modules/auth/auth.repository.js";
 
-const envSchema = z.object({
-  ADMIN_EMAIL: z.string().email(),
-  ADMIN_PASSWORD: z.string().min(12, "Password must be at least 12 characters long"),
+const adminArgumentsSchema = z.object({
+  username: z.string().trim().min(1).regex(/^[a-zA-Z0-9._-]+$/u).transform((username) => username.toLowerCase()),
+  password: z.string().min(12, "Password must be at least 12 characters long"),
 });
 
-async function main() {
-  try {
-    const parsedEnv = envSchema.safeParse(process.env);
+function parseArguments(args: string[]): { username?: string; password?: string } | null {
+  const values: { username?: string; password?: string } = {};
 
-    if (!parsedEnv.success) {
-      console.error("Invalid or missing ADMIN_EMAIL or ADMIN_PASSWORD environment variables.");
-      process.exit(1);
+  for (let index = 0; index < args.length; index += 2) {
+    const flag = args[index];
+    const value = args[index + 1];
+    if ((flag !== "--username" && flag !== "--password") || !value || value.startsWith("--")) {
+      return null;
     }
+    const key = flag.slice(2) as "username" | "password";
+    if (values[key] !== undefined) {
+      return null;
+    }
+    values[key] = value;
+  }
 
-    const { ADMIN_EMAIL, ADMIN_PASSWORD } = parsedEnv.data;
+  return values;
+}
 
-    await checkDatabaseConnection();
-
-    const existingUser = await authRepository.getUserByEmail(ADMIN_EMAIL);
-    if (existingUser) {
-      console.log(`Admin user with email ${ADMIN_EMAIL} already exists. Skipping creation.`);
+export async function main(args = process.argv.slice(2)): Promise<void> {
+  try {
+    const parsedArguments = adminArgumentsSchema.safeParse(parseArguments(args));
+    if (!parsedArguments.success) {
+      console.error("Usage: auth:create-admin --username <username> --password <secure password of at least 12 characters>");
+      process.exitCode = 1;
       return;
     }
 
-    const passwordHash = await argon2.hash(ADMIN_PASSWORD);
-    
-    const newUser = await authRepository.createAdmin(ADMIN_EMAIL, passwordHash);
-    
-    if (newUser) {
-      console.log(`Successfully created admin user: ${ADMIN_EMAIL}`);
-    } else {
-      console.log(`User ${ADMIN_EMAIL} already exists or could not be created.`);
-    }
+    const { username, password } = parsedArguments.data;
+    await checkDatabaseConnection();
 
-  } catch (error) {
-    console.error("An error occurred while creating the admin user:", error instanceof Error ? error.message : "unknown error");
-    process.exit(1);
+    const passwordHash = await argon2.hash(password);
+    await authRepository.createOrResetAdmin(username, passwordHash);
+
+    console.log(`Admin user '${username}' was created or reset successfully.`);
+    process.exitCode = 0;
+  } catch {
+    console.error("An error occurred while creating or resetting the admin user.");
+    process.exitCode = 1;
   } finally {
     await closeDatabasePool();
   }
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main();
+}
