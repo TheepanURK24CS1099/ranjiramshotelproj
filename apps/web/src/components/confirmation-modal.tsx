@@ -9,6 +9,7 @@ interface ConfirmationModalProps {
   pending?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  children?: React.ReactNode;
 }
 
 export function ConfirmationModal({
@@ -20,6 +21,7 @@ export function ConfirmationModal({
   pending = false,
   onCancel,
   onConfirm,
+  children,
 }: ConfirmationModalProps) {
   if (!open) return null;
 
@@ -32,17 +34,18 @@ export function ConfirmationModal({
       }}
     >
       <div
-        aria-labelledby="permanent-delete-title"
+        aria-labelledby="confirmation-modal-title"
         aria-modal="true"
         className="w-full max-w-md rounded bg-white p-6 shadow-xl"
         role="dialog"
       >
-        <h2 id="permanent-delete-title" className="text-xl font-semibold text-gray-900">
+          <h2 id="confirmation-modal-title" className="text-xl font-semibold text-gray-900">
           {title ?? `Delete ${recordName} permanently?`}
         </h2>
         <p className="mt-3 text-sm text-gray-600">
           {message ?? "Permanent deletion cannot be undone. Historical records may prevent this record from being deleted."}
         </p>
+        {children && <div className="mt-4">{children}</div>}
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
