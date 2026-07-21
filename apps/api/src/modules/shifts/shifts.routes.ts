@@ -12,5 +12,6 @@ router.get("/:id", requireAuth, requireRole("ADMIN", "MANAGER"), shiftsControlle
 router.post("/", requireAuth, requireRole("ADMIN"), shiftsController.createShift);
 router.patch("/:id", requireAuth, requireRole("ADMIN"), shiftsController.updateShift);
 router.patch("/:id/status", requireAuth, requireRole("ADMIN"), shiftsController.updateShiftStatus);
+router.delete("/:id", requireAuth, requireRole("ADMIN"), shiftsController.deleteShift);
 
 export default router;

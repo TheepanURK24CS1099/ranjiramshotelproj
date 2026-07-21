@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { ConfirmationModal } from "@/components/confirmation-modal";
 
 export default function EditShiftPage() {
   const router = useRouter();
@@ -10,12 +11,19 @@ export default function EditShiftPage() {
   const id = params.id as string;
 
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const [shift, setShift] = useState<Record<string, string | number | boolean> | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [shift, setShift] = useState<Record<string, string | number | boolean | number[]> | null>(null);
 
   useEffect(() => {
-    apiClient.get(`/shifts/${id}`)
-      .then((data) => setShift(data as Record<string, string | number | boolean>))
+    Promise.all([apiClient.get(`/shifts/${id}`), apiClient.get("/auth/me")])
+      .then(([data, userData]) => {
+        setShift(data as Record<string, string | number | boolean | number[]>);
+        setIsAdmin((userData as { role?: string }).role === "ADMIN");
+      })
       .catch((err: unknown) => {
         setError("Failed to load shift data");
         console.error(err);
@@ -32,6 +40,7 @@ export default function EditShiftPage() {
     e.preventDefault();
     if (!shift) return;
     setError("");
+    setSuccess("");
     setLoading(true);
 
     const payload = {
@@ -40,12 +49,17 @@ export default function EditShiftPage() {
       end_time: shift.end_time,
       grace_minutes: parseInt(String(shift.grace_minutes), 10),
       minimum_work_minutes: parseInt(String(shift.minimum_work_minutes), 10),
+      early_exit_tolerance_minutes: parseInt(String(shift.early_exit_tolerance_minutes), 10) || 0,
+      checkin_before_minutes: parseInt(String(shift.checkin_before_minutes), 10) || 0,
+      checkout_after_minutes: parseInt(String(shift.checkout_after_minutes), 10) || 0,
+      weekly_off_days: Array.isArray(shift.weekly_off_days) ? shift.weekly_off_days : [],
       is_overnight: Boolean(shift.is_overnight),
+      active: Boolean(shift.active),
     };
 
     try {
       await apiClient.patch(`/shifts/${id}`, payload);
-      alert("Updated successfully!");
+      setSuccess("Shift updated successfully.");
     } catch (err: unknown) {
       if (err instanceof ApiError) setError(err.message);
       else setError("An unexpected error occurred");
@@ -56,16 +70,32 @@ export default function EditShiftPage() {
 
   const handleToggleStatus = async () => {
     if (!shift) return;
-    if (!confirm(`Are you sure you want to ${shift.active ? "deactivate" : "activate"} this shift?`)) return;
+    setError("");
+    setSuccess("");
     try {
-      await apiClient.patch(`/shifts/${id}/status`, { active: !shift.active });
-      setShift({ ...shift, active: !shift.active });
+      const updated = await apiClient.patch(`/shifts/${id}/status`, { active: !shift.active });
+      setShift(updated as Record<string, string | number | boolean | number[]>);
+      setSuccess(`Shift ${shift.active ? "deactivated" : "activated"} successfully.`);
     } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        alert(err.message || "Failed to update status");
-      } else {
-        alert("Failed to update status");
-      }
+      setError(err instanceof ApiError ? err.message : "Failed to update status");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!shift || !isAdmin) return;
+    setDeleting(true);
+    setError("");
+    setSuccess("");
+    try {
+      await apiClient.delete(`/shifts/${id}`);
+      setShowDeleteConfirmation(false);
+      router.replace("/shifts");
+      router.refresh();
+    } catch (err: unknown) {
+      setShowDeleteConfirmation(false);
+      setError(err instanceof ApiError ? err.message : "Failed to delete shift. Deactivate the shift instead.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -74,17 +104,29 @@ export default function EditShiftPage() {
 
   return (
     <div className="max-w-2xl mx-auto bg-white p-6 rounded shadow">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between gap-3 items-center mb-6">
         <h1 className="text-2xl font-semibold">Edit Shift: {shift.name}</h1>
-        <button 
-          onClick={handleToggleStatus}
-          className={`px-4 py-2 text-white rounded ${shift.active ? "bg-[#DC2626] hover:bg-[#B91C1C]" : "bg-[#0AB68B] hover:bg-[#089774]"}`}
-        >
-          {shift.active ? "Deactivate Shift" : "Activate Shift"}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={handleToggleStatus}
+            className={`px-4 py-2 text-white rounded ${shift.active ? "bg-[#DC2626] hover:bg-[#B91C1C]" : "bg-[#0AB68B] hover:bg-[#089774]"}`}
+          >
+            {shift.active ? "Deactivate Shift" : "Activate Shift"}
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirmation(true)}
+              className="rounded border border-red-600 px-4 py-2 text-red-600 hover:bg-red-50"
+            >
+              Delete Permanently
+            </button>
+          )}
+        </div>
       </div>
       
       {error && <div className="mb-4 p-3 text-red-600 bg-red-100 rounded">{error}</div>}
+      {success && <div className="mb-4 p-3 text-green-800 bg-green-100 rounded" role="status">{success}</div>}
 
       <form onSubmit={handleUpdate} className="space-y-6">
         <div>
@@ -109,7 +151,11 @@ export default function EditShiftPage() {
             <label className="block text-sm font-medium text-gray-700">Min Work Minutes</label>
             <input type="number" min="0" name="minimum_work_minutes" value={String(shift.minimum_work_minutes)} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" />
           </div>
+          <div><label className="block text-sm font-medium text-gray-700">Early-exit tolerance</label><input type="number" min="0" name="early_exit_tolerance_minutes" value={String(shift.early_exit_tolerance_minutes ?? 0)} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
+          <div><label className="block text-sm font-medium text-gray-700">Allowed check-in before</label><input type="number" min="0" name="checkin_before_minutes" value={String(shift.checkin_before_minutes ?? 0)} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
+          <div><label className="block text-sm font-medium text-gray-700">Allowed checkout after</label><input type="number" min="0" name="checkout_after_minutes" value={String(shift.checkout_after_minutes ?? 360)} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
         </div>
+        <fieldset><legend className="text-sm font-medium text-gray-700">Weekly-off days</legend><div className="flex flex-wrap gap-3 mt-2">{["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((day,index)=>{const days=Array.isArray(shift.weekly_off_days)?shift.weekly_off_days:[];return <label key={day} className="text-sm"><input type="checkbox" checked={days.includes(index)} onChange={()=>setShift({...shift,weekly_off_days:days.includes(index)?days.filter(x=>x!==index):[...days,index]})} /> {day}</label>})}</div></fieldset>
 
         <div className="flex items-center">
           <input type="checkbox" id="is_overnight" name="is_overnight" checked={Boolean(shift.is_overnight)} onChange={handleChange} className="h-4 w-4 text-blue-600 rounded border-gray-300" />
@@ -125,6 +171,13 @@ export default function EditShiftPage() {
           </button>
         </div>
       </form>
+      <ConfirmationModal
+        open={showDeleteConfirmation}
+        recordName={String(shift.name)}
+        pending={deleting}
+        onCancel={() => setShowDeleteConfirmation(false)}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

@@ -19,6 +19,9 @@ type AttendanceRow = {
   punch_out_at: string | null;
   working_minutes: number;
   raw_punch_count: number;
+  late_minutes: number;
+  early_exit_minutes: number;
+  note: string | null;
   status: AttendanceStatus;
 };
 
@@ -172,7 +175,10 @@ export default function AttendancePage() {
                 <th className="p-3 font-medium text-gray-500">Punch In</th>
                 <th className="p-3 font-medium text-gray-500">Punch Out</th>
                 <th className="p-3 font-medium text-gray-500">Punches</th>
+                <th className="p-3 font-medium text-gray-500">Late</th>
+                <th className="p-3 font-medium text-gray-500">Early Exit</th>
                 <th className="p-3 font-medium text-gray-500">Working Hours</th>
+                <th className="p-3 font-medium text-gray-500">Note / Reason</th>
                 <th className="p-3 font-medium text-gray-500">Status</th>
               </tr>
             </thead>
@@ -186,7 +192,10 @@ export default function AttendancePage() {
                   <td className="p-3">{formatTimeOnly(row.punch_in_at)}</td>
                   <td className="p-3">{formatTimeOnly(row.punch_out_at)}</td>
                   <td className="p-3">{row.raw_punch_count}</td>
+                  <td className="p-3">{row.late_minutes}</td>
+                  <td className="p-3">{row.early_exit_minutes}</td>
                   <td className="p-3">{formatWorkingMinutes(row.working_minutes)}</td>
+                  <td className="p-3">{row.note ?? "—"}</td>
                   <td className="p-3">
                     <span
                       className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
@@ -206,7 +215,7 @@ export default function AttendancePage() {
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="p-5 text-center text-gray-500">
+                  <td colSpan={12} className="p-5 text-center text-gray-500">
                     No attendance records found.
                   </td>
                 </tr>

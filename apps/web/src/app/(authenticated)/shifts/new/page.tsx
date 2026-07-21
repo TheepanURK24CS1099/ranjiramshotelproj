@@ -15,6 +15,10 @@ export default function NewShiftPage() {
     end_time: "17:00",
     grace_minutes: "0",
     minimum_work_minutes: "0",
+    early_exit_tolerance_minutes: "0",
+    checkin_before_minutes: "0",
+    checkout_after_minutes: "360",
+    weekly_off_days: [] as number[],
     is_overnight: false,
   });
 
@@ -32,6 +36,9 @@ export default function NewShiftPage() {
       ...formData,
       grace_minutes: parseInt(formData.grace_minutes, 10) || 0,
       minimum_work_minutes: parseInt(formData.minimum_work_minutes, 10) || 0,
+      early_exit_tolerance_minutes: parseInt(formData.early_exit_tolerance_minutes, 10) || 0,
+      checkin_before_minutes: parseInt(formData.checkin_before_minutes, 10) || 0,
+      checkout_after_minutes: parseInt(formData.checkout_after_minutes, 10) || 0,
     };
 
     try {
@@ -77,7 +84,11 @@ export default function NewShiftPage() {
             <label className="block text-sm font-medium text-gray-700">Min Work Minutes</label>
             <input type="number" min="0" name="minimum_work_minutes" value={formData.minimum_work_minutes} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" />
           </div>
+          <div><label className="block text-sm font-medium text-gray-700">Early-exit tolerance (minutes)</label><input type="number" min="0" name="early_exit_tolerance_minutes" value={formData.early_exit_tolerance_minutes} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
+          <div><label className="block text-sm font-medium text-gray-700">Allowed check-in before (minutes)</label><input type="number" min="0" name="checkin_before_minutes" value={formData.checkin_before_minutes} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
+          <div><label className="block text-sm font-medium text-gray-700">Allowed checkout after (minutes)</label><input type="number" min="0" name="checkout_after_minutes" value={formData.checkout_after_minutes} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
         </div>
+        <fieldset><legend className="text-sm font-medium text-gray-700">Weekly-off days</legend><div className="flex flex-wrap gap-3 mt-2">{["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((day,index)=><label key={day} className="text-sm"><input type="checkbox" checked={formData.weekly_off_days.includes(index)} onChange={()=>setFormData({...formData,weekly_off_days:formData.weekly_off_days.includes(index)?formData.weekly_off_days.filter(x=>x!==index):[...formData.weekly_off_days,index]})} /> {day}</label>)}</div></fieldset>
 
         <div className="flex items-center">
           <input type="checkbox" id="is_overnight" name="is_overnight" checked={formData.is_overnight} onChange={handleChange} className="h-4 w-4 text-blue-600 rounded border-gray-300" />

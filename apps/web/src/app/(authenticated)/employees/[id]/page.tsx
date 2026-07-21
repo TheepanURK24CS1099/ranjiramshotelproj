@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatShiftTime } from "@/lib/format";
+import { ConfirmationModal } from "@/components/confirmation-modal";
 
 export default function EditEmployeePage() {
   const router = useRouter();
@@ -13,7 +14,11 @@ export default function EditEmployeePage() {
   const [shifts, setShifts] = useState<Record<string, unknown>[]>([]);
   const [assignments, setAssignments] = useState<Record<string, unknown>[]>([]);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [employee, setEmployee] = useState<Record<string, string | number | boolean | null> | null>(null);
 
   const [shiftId, setShiftId] = useState("");
@@ -25,7 +30,8 @@ export default function EditEmployeePage() {
       apiClient.get(`/employees/${id}`),
       apiClient.get(`/employees/${id}/shift-assignments`),
       apiClient.get(`/shifts?active=true`),
-    ]).then(([empData, assignData, shiftsData]) => {
+      apiClient.get("/auth/me"),
+    ]).then(([empData, assignData, shiftsData, userData]) => {
       // Date formatting for input type="date"
       if (empData.joining_date) {
         empData.joining_date = empData.joining_date.substring(0, 10);
@@ -33,6 +39,7 @@ export default function EditEmployeePage() {
       setEmployee(empData);
       setAssignments(assignData as Record<string, unknown>[]);
       setShifts(shiftsData as Record<string, unknown>[]);
+      setIsAdmin((userData as { role?: string }).role === "ADMIN");
     }).catch((err: unknown) => {
       setError("Failed to load data");
       console.error(err);
@@ -48,6 +55,7 @@ export default function EditEmployeePage() {
     e.preventDefault();
     if (!employee) return;
     setError("");
+    setSuccess("");
     setLoading(true);
 
     const payload = {
@@ -62,7 +70,7 @@ export default function EditEmployeePage() {
 
     try {
       await apiClient.patch(`/employees/${id}`, payload);
-      alert("Updated successfully!");
+      setSuccess("Employee updated successfully.");
     } catch (err: unknown) {
       if (err instanceof ApiError) setError(err.message);
       else setError("An unexpected error occurred");
@@ -73,16 +81,32 @@ export default function EditEmployeePage() {
 
   const handleToggleStatus = async () => {
     if (!employee) return;
-    if (!confirm(`Are you sure you want to ${employee.active ? "deactivate" : "activate"} this employee?`)) return;
+    setError("");
+    setSuccess("");
     try {
-      await apiClient.patch(`/employees/${id}/status`, { active: !employee.active });
-      setEmployee({ ...employee, active: !employee.active });
+      const updated = await apiClient.patch(`/employees/${id}/status`, { active: !employee.active });
+      setEmployee(updated as Record<string, string | number | boolean | null>);
+      setSuccess(`Employee ${employee.active ? "deactivated" : "activated"} successfully.`);
     } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        alert(err.message || "Failed to update status");
-      } else {
-        alert("Failed to update status");
-      }
+      setError(err instanceof ApiError ? err.message : "Failed to update status");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!employee || !isAdmin) return;
+    setDeleting(true);
+    setError("");
+    setSuccess("");
+    try {
+      await apiClient.delete(`/employees/${id}`);
+      setShowDeleteConfirmation(false);
+      router.replace("/employees");
+      router.refresh();
+    } catch (err: unknown) {
+      setShowDeleteConfirmation(false);
+      setError(err instanceof ApiError ? err.message : "Failed to delete employee. Deactivate the employee instead.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -110,17 +134,29 @@ export default function EditEmployeePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="bg-white p-6 rounded shadow">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-wrap justify-between gap-3 items-center mb-6">
           <h1 className="text-2xl font-semibold">Edit Employee: {employee.name}</h1>
-          <button 
-            onClick={handleToggleStatus}
-            className={`px-4 py-2 text-white rounded ${employee.active ? "bg-[#DC2626] hover:bg-[#B91C1C]" : "bg-[#0AB68B] hover:bg-[#089774]"}`}
-          >
-            {employee.active ? "Deactivate Employee" : "Activate Employee"}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleToggleStatus}
+              className={`px-4 py-2 text-white rounded ${employee.active ? "bg-[#DC2626] hover:bg-[#B91C1C]" : "bg-[#0AB68B] hover:bg-[#089774]"}`}
+            >
+              {employee.active ? "Deactivate Employee" : "Activate Employee"}
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirmation(true)}
+                className="rounded border border-red-600 px-4 py-2 text-red-600 hover:bg-red-50"
+              >
+                Delete Permanently
+              </button>
+            )}
+          </div>
         </div>
 
         {error && <div className="mb-4 p-3 text-red-600 bg-red-100 rounded">{error}</div>}
+        {success && <div className="mb-4 p-3 text-green-800 bg-green-100 rounded" role="status">{success}</div>}
 
         <form onSubmit={handleUpdate} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -206,6 +242,13 @@ export default function EditEmployeePage() {
           </tbody>
         </table>
       </div>
+      <ConfirmationModal
+        open={showDeleteConfirmation}
+        recordName={String(employee.name)}
+        pending={deleting}
+        onCancel={() => setShowDeleteConfirmation(false)}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

@@ -24,4 +24,8 @@ export async function rebuildAttendance(date: string): Promise<void> {
   await repository.rebuildAttendanceForDate(date);
 }
 
+export async function rebuildAttendanceForAllActiveEmployees(date: string): Promise<{ processed: number }> {
+  return await repository.rebuildAttendanceForAllActiveEmployees(date);
+}
+
 export type { AttendanceStatus };

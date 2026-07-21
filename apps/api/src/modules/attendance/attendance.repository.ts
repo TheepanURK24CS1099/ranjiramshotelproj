@@ -1,4 +1,3 @@
-import { env } from "../../config/environment.js";
 import { getDatabasePool } from "../../infrastructure/database/database.js";
 
 const pool = getDatabasePool();
@@ -6,7 +5,7 @@ const IST_OFFSET_MINUTES = 330;
 const IST_OFFSET_MS = IST_OFFSET_MINUTES * 60_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type AttendanceStatus = "PRESENT" | "MISSING_PUNCH" | "UNMATCHED" | "NO_SHIFT";
+export type AttendanceStatus = "PRESENT" | "LATE" | "EARLY_EXIT" | "LATE_AND_EARLY_EXIT" | "HALF_DAY" | "ABSENT" | "MISSING_PUNCH" | "WEEKLY_OFF" | "HOLIDAY" | "NO_SHIFT" | "UNMATCHED";
 
 export interface AttendanceRecord {
   attendance_key: string;
@@ -19,11 +18,15 @@ export interface AttendanceRecord {
   punch_in_at: Date | null;
   punch_out_at: Date | null;
   working_minutes: number;
+  late_minutes: number;
+  early_exit_minutes: number;
+  note: string | null;
   raw_punch_count: number;
   status: AttendanceStatus;
   first_raw_punch_id: number | null;
   last_raw_punch_id: number | null;
   unmatched_raw_punch_id: number | null;
+  holiday_id: string | null;
 }
 
 interface RawPunchRow {
@@ -40,6 +43,12 @@ interface ShiftAssignmentRow {
   start_time: string;
   end_time: string;
   is_overnight: boolean;
+  grace_minutes: number;
+  minimum_work_minutes: number;
+  early_exit_tolerance_minutes: number;
+  checkin_before_minutes: number;
+  checkout_after_minutes: number;
+  weekly_off_days: number[];
 }
 
 export interface AttendanceFilters {
@@ -69,7 +78,7 @@ export interface AttendanceException {
   message: string;
 }
 
-type AttendanceUpsertRecord = Omit<AttendanceRecord, "employee_name" | "shift_name">;
+type AttendanceUpsertRecord = Omit<AttendanceRecord, "employee_name" | "shift_name" | "late_minutes" | "early_exit_minutes" | "note" | "holiday_id"> & Partial<Pick<AttendanceRecord, "late_minutes" | "early_exit_minutes" | "note" | "holiday_id">>;
 
 function assertDate(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
@@ -144,12 +153,28 @@ function isOvernightShift(startTime: string | null, endTime: string | null, isOv
   return parseTimeParts(endTime).hours < parseTimeParts(startTime).hours || endTime <= startTime;
 }
 
-function attendanceWindowEnd(shiftEnd: Date, overnight: boolean): Date {
+function attendanceWindowEnd(shiftEnd: Date, overnight: boolean, checkoutAfterMinutes: number): Date {
   if (overnight) {
     return shiftEnd;
   }
 
-  return new Date(shiftEnd.getTime() + env.ATTENDANCE_CHECKOUT_WINDOW_MINUTES * 60_000);
+  return new Date(shiftEnd.getTime() + checkoutAfterMinutes * 60_000);
+}
+
+function attendanceStatusForPunches(first: RawPunchRow, last: RawPunchRow, shiftStart: Date, shiftEnd: Date, shift: ShiftAssignmentRow): { status: AttendanceStatus; lateMinutes: number; earlyExitMinutes: number; note: string | null } {
+  if (first.id === last.id) return { status: "MISSING_PUNCH", lateMinutes: 0, earlyExitMinutes: 0, note: "Missing punch out" };
+  // Existing shifts with no configured attendance rules retain the validated Part 13 PRESENT behavior.
+  if (shift.grace_minutes === 0 && shift.minimum_work_minutes === 0 && shift.early_exit_tolerance_minutes === 0) {
+    return { status: "PRESENT", lateMinutes: 0, earlyExitMinutes: 0, note: null };
+  }
+  const lateMinutes = Math.max(0, minutesBetween(new Date(shiftStart.getTime() + shift.grace_minutes * 60_000), first.punch_time));
+  const earlyExitMinutes = Math.max(0, minutesBetween(last.punch_time, new Date(shiftEnd.getTime() - shift.early_exit_tolerance_minutes * 60_000)));
+  const worked = minutesBetween(first.punch_time, last.punch_time);
+  if (shift.minimum_work_minutes > 0 && worked < shift.minimum_work_minutes) return { status: "HALF_DAY", lateMinutes, earlyExitMinutes, note: "Below minimum working minutes" };
+  if (lateMinutes && earlyExitMinutes) return { status: "LATE_AND_EARLY_EXIT", lateMinutes, earlyExitMinutes, note: null };
+  if (lateMinutes) return { status: "LATE", lateMinutes, earlyExitMinutes, note: null };
+  if (earlyExitMinutes) return { status: "EARLY_EXIT", lateMinutes, earlyExitMinutes, note: null };
+  return { status: "PRESENT", lateMinutes: 0, earlyExitMinutes: 0, note: null };
 }
 
 function sortPunches(punches: RawPunchRow[]): RawPunchRow[] {
@@ -175,11 +200,15 @@ async function upsertAttendanceRecord(record: AttendanceUpsertRecord): Promise<v
       punch_out_at,
       working_minutes,
       raw_punch_count,
+      late_minutes,
+      early_exit_minutes,
+      note,
       status,
       first_raw_punch_id,
       last_raw_punch_id,
       unmatched_raw_punch_id
-    ) VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ,holiday_id
+    ) VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     ON CONFLICT (attendance_key) DO UPDATE SET
       attendance_date = EXCLUDED.attendance_date,
       employee_id = EXCLUDED.employee_id,
@@ -189,6 +218,10 @@ async function upsertAttendanceRecord(record: AttendanceUpsertRecord): Promise<v
       punch_out_at = EXCLUDED.punch_out_at,
       working_minutes = EXCLUDED.working_minutes,
       raw_punch_count = EXCLUDED.raw_punch_count,
+      late_minutes = EXCLUDED.late_minutes,
+      early_exit_minutes = EXCLUDED.early_exit_minutes,
+      note = EXCLUDED.note,
+      holiday_id = EXCLUDED.holiday_id,
       status = EXCLUDED.status,
       first_raw_punch_id = EXCLUDED.first_raw_punch_id,
       last_raw_punch_id = EXCLUDED.last_raw_punch_id,
@@ -203,10 +236,14 @@ async function upsertAttendanceRecord(record: AttendanceUpsertRecord): Promise<v
       record.punch_out_at,
       record.working_minutes,
       record.raw_punch_count,
+      record.late_minutes ?? 0,
+      record.early_exit_minutes ?? 0,
+      record.note ?? null,
       record.status,
       record.first_raw_punch_id,
       record.last_raw_punch_id,
       record.unmatched_raw_punch_id,
+      record.holiday_id ?? null,
     ],
   );
 }
@@ -255,7 +292,7 @@ async function getShiftAssignmentForDate(employeeId: string, date: string): Prom
       s.name AS shift_name,
       s.start_time,
       s.end_time,
-      s.is_overnight
+      s.is_overnight, s.grace_minutes, s.minimum_work_minutes, s.early_exit_tolerance_minutes, s.checkin_before_minutes, s.checkout_after_minutes, s.weekly_off_days
      FROM employee_shift_assignments esa
      JOIN shifts s ON s.id = esa.shift_id
      WHERE esa.employee_id = $1
@@ -385,7 +422,7 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
     const overnight = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight);
     const shiftEndDate = overnight ? addDays(attendanceDate, 1) : attendanceDate;
     const shiftEnd = toUtcFromIstDateTime(shiftEndDate, shift.end_time);
-    const windowEnd = attendanceWindowEnd(shiftEnd, overnight);
+    const windowEnd = attendanceWindowEnd(shiftEnd, overnight, shift.checkout_after_minutes);
     const punchesInWindow = sortPunches(dateWindowPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= windowEnd));
 
     await syncOutOfShiftExceptions(punch.employee_id, Number(punch.biometric_id), attendanceDate, shift, localPunches, punchesInWindow);
@@ -406,7 +443,7 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
       punch_out_at: last.id === first.id ? null : last.punch_time,
       working_minutes: last.id === first.id ? 0 : minutesBetween(first.punch_time, last.punch_time),
       raw_punch_count: punchesInWindow.length,
-      status: punchesInWindow.length === 1 ? "MISSING_PUNCH" : "PRESENT",
+      ...attendanceStatusForPunches(first, last, shiftStart, shiftEnd, shift),
       first_raw_punch_id: first.id,
       last_raw_punch_id: last.id,
       unmatched_raw_punch_id: null,
@@ -508,7 +545,7 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
   const overnight = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight);
   const shiftEndDate = overnight ? addDays(attendanceDate, 1) : attendanceDate;
   const shiftEnd = toUtcFromIstDateTime(shiftEndDate, shift.end_time);
-  const windowEnd = attendanceWindowEnd(shiftEnd, overnight);
+  const windowEnd = attendanceWindowEnd(shiftEnd, overnight, shift.checkout_after_minutes);
   const punchesInWindow = sortPunches(rawPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= windowEnd));
 
   await syncOutOfShiftExceptions(firstPunch.employee_id, Number(firstPunch.biometric_id), attendanceDate, shift, localPunches, punchesInWindow);
@@ -529,11 +566,35 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
     punch_out_at: last.id === first.id ? null : last.punch_time,
     working_minutes: last.id === first.id ? 0 : minutesBetween(first.punch_time, last.punch_time),
     raw_punch_count: punchesInWindow.length,
-    status: punchesInWindow.length === 1 ? "MISSING_PUNCH" : "PRESENT",
+    ...attendanceStatusForPunches(first, last, shiftStart, shiftEnd, shift),
     first_raw_punch_id: first.id,
     last_raw_punch_id: last.id,
     unmatched_raw_punch_id: null,
   });
+}
+
+export async function rebuildAttendanceForAllActiveEmployees(date: string): Promise<{ processed: number }> {
+  const attendanceDate = assertDate(date);
+  await rebuildAttendanceForDate(attendanceDate);
+  const employees = await pool.query<{ id: string; biometric_id: number; joining_date: string }>(
+    "SELECT id, biometric_id, joining_date::text FROM employees WHERE active = true AND joining_date <= $1::date",
+    [attendanceDate],
+  );
+  const holiday = await pool.query<{ id: string; name: string }>("SELECT id, name FROM holidays WHERE holiday_date = $1::date AND active = true", [attendanceDate]);
+  const weekday = (new Date(`${attendanceDate}T00:00:00Z`).getUTCDay() + 6) % 7;
+
+  for (const employee of employees.rows) {
+    const shift = await getShiftAssignmentForDate(employee.id, attendanceDate);
+    if (!shift) {
+      await upsertAttendanceRecord({ attendance_key: attendanceKeyForEmployee(employee.id, attendanceDate), attendance_date: attendanceDate, employee_id: employee.id, biometric_id: Number(employee.biometric_id), shift_id: null, punch_in_at: null, punch_out_at: null, working_minutes: 0, raw_punch_count: 0, status: "NO_SHIFT", first_raw_punch_id: null, last_raw_punch_id: null, unmatched_raw_punch_id: null, note: "No applicable shift" });
+      continue;
+    }
+    const existing = await pool.query("SELECT raw_punch_count FROM daily_attendance_records WHERE attendance_key = $1", [attendanceKeyForEmployee(employee.id, attendanceDate)]);
+    if (Number(existing.rows[0]?.raw_punch_count ?? 0) > 0) continue;
+    const status: AttendanceStatus = holiday.rows[0] ? "HOLIDAY" : shift.weekly_off_days.includes(weekday) ? "WEEKLY_OFF" : "ABSENT";
+    await upsertAttendanceRecord({ attendance_key: attendanceKeyForEmployee(employee.id, attendanceDate), attendance_date: attendanceDate, employee_id: employee.id, biometric_id: Number(employee.biometric_id), shift_id: shift.shift_id, punch_in_at: null, punch_out_at: null, working_minutes: 0, raw_punch_count: 0, status, first_raw_punch_id: null, last_raw_punch_id: null, unmatched_raw_punch_id: null, holiday_id: status === "HOLIDAY" ? holiday.rows[0]!.id : null, note: status === "HOLIDAY" ? holiday.rows[0]!.name : status === "WEEKLY_OFF" ? "Weekly off" : "Absent" });
+  }
+  return { processed: employees.rowCount ?? 0 };
 }
 
 export async function listAttendance(filters: AttendanceFilters): Promise<AttendanceRecord[]> {
@@ -572,6 +633,10 @@ export async function listAttendance(filters: AttendanceFilters): Promise<Attend
       a.punch_out_at,
       a.working_minutes,
       a.raw_punch_count,
+      a.late_minutes,
+      a.early_exit_minutes,
+      a.note,
+      a.holiday_id,
       a.status,
       a.first_raw_punch_id,
       a.last_raw_punch_id,

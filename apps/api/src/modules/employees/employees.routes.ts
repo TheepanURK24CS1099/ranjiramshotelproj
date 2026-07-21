@@ -13,6 +13,7 @@ router.get("/:id/shift-assignments", requireAuth, requireRole("ADMIN", "MANAGER"
 router.post("/", requireAuth, requireRole("ADMIN"), employeesController.createEmployee);
 router.patch("/:id", requireAuth, requireRole("ADMIN"), employeesController.updateEmployee);
 router.patch("/:id/status", requireAuth, requireRole("ADMIN"), employeesController.updateEmployeeStatus);
+router.delete("/:id", requireAuth, requireRole("ADMIN"), employeesController.deleteEmployee);
 router.post("/:id/shift-assignments", requireAuth, requireRole("ADMIN"), employeesController.assignShift);
 
 export default router;
