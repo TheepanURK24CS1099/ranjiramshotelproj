@@ -19,6 +19,7 @@ let endpointDeviceId = "";
 let endpointShiftId = "";
 let lateCheckoutPunchId = 0;
 let nextDayPunchId = 0;
+let farOutsidePunchId = 0;
 
 function currentIstDate(): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -110,6 +111,7 @@ describe("Part 13 attendance engine", () => {
 
     await insertRawPunch(biometricIds[0]!, istDateTime(attendanceDate, "09:05:00"));
     await insertRawPunch(biometricIds[0]!, istDateTime(attendanceDate, "18:05:00"));
+    farOutsidePunchId = await getRawPunchId(await insertRawPunch(biometricIds[0]!, istDateTime(attendanceDate, "06:00:00")));
 
     await insertRawPunch(biometricIds[1]!, istDateTime(attendanceDate, "22:10:00"));
     await insertRawPunch(biometricIds[1]!, istDateTime("2026-07-21", "05:50:00"));
@@ -171,6 +173,32 @@ describe("Part 13 attendance engine", () => {
     expect(record).toMatchObject({ raw_punch_count: 2, status: "PRESENT", punch_out_ist: "18:05" });
   });
 
+  it("classifies a far outside-window punch without changing valid attendance", async () => {
+    const attendance = (await pool.query(
+      `SELECT raw_punch_count, status,
+              to_char(punch_in_at AT TIME ZONE 'Asia/Kolkata', 'HH24:MI') AS punch_in_ist,
+              to_char(punch_out_at AT TIME ZONE 'Asia/Kolkata', 'HH24:MI') AS punch_out_ist
+       FROM daily_attendance_records
+       WHERE attendance_date = $1::date AND biometric_id = $2`,
+      [attendanceDate, biometricIds[0]],
+    )).rows[0];
+    const rawPunch = await pool.query("SELECT id FROM raw_attendance_punches WHERE id = $1", [farOutsidePunchId]);
+    const response = await request(app).get(`/attendance/exceptions?date=${attendanceDate}`).set("Cookie", managerCookie).expect(200);
+    const exception = response.body.find((row: Record<string, unknown>) => Number(row.raw_punch_id) === farOutsidePunchId);
+
+    expect(attendance).toMatchObject({ raw_punch_count: 2, status: "PRESENT", punch_in_ist: "09:05", punch_out_ist: "18:05" });
+    expect(rawPunch.rows).toHaveLength(1);
+    expect(response.body.filter((row: Record<string, unknown>) => String(row.biometric_id) === String(biometricIds[0]))).toHaveLength(1);
+    expect(exception).toMatchObject({
+      employee_name: `${marker}-normal`,
+      biometric_id: String(biometricIds[0]),
+      shift_name: `${marker}-day`,
+      exception_type: "OUT_OF_SHIFT",
+      message: "Punch recorded outside assigned shift window",
+    });
+    expect(new Date(String(exception.punch_time)).toISOString()).toBe(istDateTime(attendanceDate, "06:00:00").toISOString());
+  });
+
   it("uses the last punch within the checkout window several hours after shift end", async () => {
     const record = (await pool.query(
       `SELECT raw_punch_count, last_raw_punch_id,
@@ -206,6 +234,9 @@ describe("Part 13 attendance engine", () => {
     )).rows[0];
 
     expect(record).toMatchObject({ attendance_date: attendanceDate, raw_punch_count: 2, punch_out_ist: "2026-07-21 05:50" });
+
+    const exceptions = await request(app).get(`/attendance/exceptions?date=${attendanceDate}`).set("Cookie", managerCookie).expect(200);
+    expect(exceptions.body.some((row: Record<string, unknown>) => String(row.biometric_id) === String(biometricIds[1]))).toBe(false);
   });
 
   it("marks a single punch as missing punch out", async () => {
