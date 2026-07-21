@@ -3,6 +3,7 @@ import { getDatabasePool } from "../../infrastructure/database/database.js";
 export interface AppUser {
   id: string;
   email: string;
+  username: string;
   password_hash: string;
   role: "ADMIN" | "MANAGER";
   active: boolean;
@@ -23,11 +24,11 @@ export interface AuthSession {
 }
 
 export const authRepository = {
-  async getUserByEmail(email: string): Promise<AppUser | null> {
+  async getUserByUsername(username: string): Promise<AppUser | null> {
     const pool = getDatabasePool();
     const result = await pool.query<AppUser>(
-      "SELECT * FROM app_users WHERE email = $1",
-      [email]
+      "SELECT * FROM app_users WHERE lower(username) = lower($1)",
+      [username]
     );
     return result.rows[0] ?? null;
   },
@@ -108,19 +109,21 @@ export const authRepository = {
     );
   },
   
-  async createAdmin(email: string, passwordHash: string): Promise<AppUser | null> {
+  async createOrResetAdmin(username: string, passwordHash: string): Promise<AppUser> {
     const pool = getDatabasePool();
-    try {
-      const result = await pool.query<AppUser>(
-        `INSERT INTO app_users (email, password_hash, role) 
-         VALUES ($1, $2, 'ADMIN') 
-         ON CONFLICT (lower(email)) DO NOTHING
-         RETURNING *`,
-        [email, passwordHash]
-      );
-      return result.rows[0] ?? null;
-    } catch {
-      return null;
-    }
+    const result = await pool.query<AppUser>(
+      `INSERT INTO app_users (email, username, password_hash, role)
+       VALUES ($1 || '-' || replace(gen_random_uuid()::text, '-', '') || '@local.invalid', $1, $2, 'ADMIN')
+       ON CONFLICT (lower(username)) DO UPDATE
+       SET password_hash = EXCLUDED.password_hash,
+           role = 'ADMIN',
+           active = true,
+           failed_login_attempts = 0,
+           locked_until = NULL,
+           updated_at = now()
+       RETURNING *`,
+      [username, passwordHash]
+    );
+    return result.rows[0] as AppUser;
   }
 };

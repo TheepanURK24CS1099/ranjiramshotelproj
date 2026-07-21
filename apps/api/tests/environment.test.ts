@@ -80,6 +80,20 @@ describe("database URL validation", () => {
   });
 });
 
+describe("attendance checkout window configuration", () => {
+  it("defaults to six hours", () => {
+    expect(parseEnvironment({}).ATTENDANCE_CHECKOUT_WINDOW_MINUTES).toBe(360);
+  });
+
+  it.each([0, 360, 720, "360"])("accepts ATTENDANCE_CHECKOUT_WINDOW_MINUTES=%j", (value) => {
+    expect(parseEnvironment({ ATTENDANCE_CHECKOUT_WINDOW_MINUTES: value }).ATTENDANCE_CHECKOUT_WINDOW_MINUTES).toBe(Number(value));
+  });
+
+  it.each([-1, 721, 1.5, "invalid"])("rejects ATTENDANCE_CHECKOUT_WINDOW_MINUTES=%j", (value) => {
+    expect(() => parseEnvironment({ ATTENDANCE_CHECKOUT_WINDOW_MINUTES: value })).toThrow();
+  });
+});
+
 describe("database pool configuration", () => {
   it.each([1, 10, 25, 50])("accepts valid DB_POOL_MAX=%j", (value) => {
     const env = parseEnvironment({ DB_POOL_MAX: value });

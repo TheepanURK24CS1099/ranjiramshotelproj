@@ -1,3 +1,4 @@
+import { env } from "../../config/environment.js";
 import { getDatabasePool } from "../../infrastructure/database/database.js";
 
 const pool = getDatabasePool();
@@ -128,6 +129,14 @@ function isOvernightShift(startTime: string | null, endTime: string | null, isOv
   }
 
   return parseTimeParts(endTime).hours < parseTimeParts(startTime).hours || endTime <= startTime;
+}
+
+function attendanceWindowEnd(shiftEnd: Date, overnight: boolean): Date {
+  if (overnight) {
+    return shiftEnd;
+  }
+
+  return new Date(shiftEnd.getTime() + env.ATTENDANCE_CHECKOUT_WINDOW_MINUTES * 60_000);
 }
 
 function sortPunches(punches: RawPunchRow[]): RawPunchRow[] {
@@ -277,7 +286,7 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
     const shift = await getShiftAssignmentForDate(punch.employee_id, attendanceDate);
 
     const localPunches = sortPunches((punchesByEmployee.get(punch.employee_id) ?? []).filter((entry) => toIstDateKey(entry.punch_time) === attendanceDate));
-    const overnightPunches = sortPunches((punchesByEmployee.get(punch.employee_id) ?? []).filter((entry) => {
+    const dateWindowPunches = sortPunches((punchesByEmployee.get(punch.employee_id) ?? []).filter((entry) => {
       const shiftAttendanceDate = toIstDateKey(entry.punch_time);
       return shiftAttendanceDate === attendanceDate || shiftAttendanceDate === addDays(attendanceDate, 1);
     }));
@@ -309,9 +318,11 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
     }
 
     const shiftStart = toUtcFromIstDateTime(attendanceDate, shift.start_time);
-    const shiftEndDate = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight) ? addDays(attendanceDate, 1) : attendanceDate;
+    const overnight = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight);
+    const shiftEndDate = overnight ? addDays(attendanceDate, 1) : attendanceDate;
     const shiftEnd = toUtcFromIstDateTime(shiftEndDate, shift.end_time);
-    const punchesInWindow = sortPunches(overnightPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= shiftEnd));
+    const windowEnd = attendanceWindowEnd(shiftEnd, overnight);
+    const punchesInWindow = sortPunches(dateWindowPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= windowEnd));
 
     if (punchesInWindow.length === 0) {
       continue;
@@ -428,9 +439,11 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
   }
 
   const shiftStart = toUtcFromIstDateTime(attendanceDate, shift.start_time);
-  const shiftEndDate = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight) ? addDays(attendanceDate, 1) : attendanceDate;
+  const overnight = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight);
+  const shiftEndDate = overnight ? addDays(attendanceDate, 1) : attendanceDate;
   const shiftEnd = toUtcFromIstDateTime(shiftEndDate, shift.end_time);
-  const punchesInWindow = sortPunches(rawPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= shiftEnd));
+  const windowEnd = attendanceWindowEnd(shiftEnd, overnight);
+  const punchesInWindow = sortPunches(rawPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= windowEnd));
 
   if (punchesInWindow.length === 0) {
     return;

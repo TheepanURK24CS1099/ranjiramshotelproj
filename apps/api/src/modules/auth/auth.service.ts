@@ -11,7 +11,7 @@ export const authService = {
     userAgent?: string,
     ipAddress?: string
   ): Promise<{ token: string; user: Omit<AppUser, "password_hash"> } | null> {
-    const user = await authRepository.getUserByEmail(input.email);
+    const user = await authRepository.getUserByUsername(input.username);
 
     if (!user || !user.active) {
       return null;

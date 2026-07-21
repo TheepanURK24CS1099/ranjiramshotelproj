@@ -6,7 +6,7 @@ import { apiClient, ApiError } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,7 +17,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await apiClient.post("/auth/login", { email, password });
+      await apiClient.post("/auth/login", { username, password });
       router.push("/dashboard");
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -43,13 +43,14 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
+            <label className="block text-sm font-medium text-gray-700">Username</label>
             <input
-              type="email"
+              type="text"
+              placeholder="admin"
               required
               className="w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-[#028174] focus:border-blue-500"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
             />
           </div>
 
