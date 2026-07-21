@@ -1,0 +1,2 @@
+import type { Request,Response,NextFunction } from "express"; import { getDatabasePool } from "../../infrastructure/database/database.js";
+export async function requirePayrollEnabled(_req:Request,res:Response,next:NextFunction){try{const row=(await getDatabasePool().query("SELECT payroll_enabled FROM module_settings WHERE module_name='payroll'" )).rows[0];if(!row?.payroll_enabled){res.status(409).json({message:"Payroll module is disabled. Enable it from Settings to manage payroll."});return;}next();}catch(e){next(e);}}

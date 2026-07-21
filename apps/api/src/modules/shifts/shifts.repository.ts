@@ -98,3 +98,5 @@ export async function deleteShiftIfUnused(id: string): Promise<boolean> {
   if(history.rowCount) throw new Error("Cannot delete this shift because historical records exist. Deactivate the shift instead.");
   return (await pool.query("DELETE FROM shifts WHERE id=$1 RETURNING id",[id])).rowCount===1;
 }
+export async function bulkStatus(ids:string[],active:boolean):Promise<number>{return (await pool.query("UPDATE shifts SET active=$2 WHERE id=ANY($1::uuid[])",[ids,active])).rowCount??0;}
+export async function deleteUnused(ids:string[]):Promise<number>{const c=await pool.connect();try{await c.query("BEGIN");const used=await c.query("SELECT 1 FROM employee_shift_assignments WHERE shift_id=ANY($1::uuid[]) UNION ALL SELECT 1 FROM daily_attendance_records WHERE shift_id=ANY($1::uuid[]) LIMIT 1",[ids]);if(used.rowCount)throw new Error("Cannot delete this shift because historical records exist. Deactivate the shift instead.");const r=await c.query("DELETE FROM shifts WHERE id=ANY($1::uuid[])",[ids]);await c.query("COMMIT");return r.rowCount??0;}catch(e){await c.query("ROLLBACK");throw e;}finally{c.release();}}

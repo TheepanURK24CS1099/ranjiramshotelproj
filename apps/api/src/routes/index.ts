@@ -9,6 +9,8 @@ import employeesRoutes from "../modules/employees/employees.routes.js";
 import devicesRoutes from "../modules/devices/devices.routes.js";
 import attendanceRoutes from "../modules/attendance/attendance.routes.js";
 import holidaysRoutes from "../modules/holidays/holidays.routes.js";
+import payrollRoutes from "../modules/payroll/payroll.routes.js";
+import settingsRoutes from "../modules/settings/settings.routes.js";
 
 const router = Router();
 
@@ -20,6 +22,8 @@ router.use("/employees", employeesRoutes);
 router.use("/devices", devicesRoutes);
 router.use("/attendance", attendanceRoutes);
 router.use("/holidays", holidaysRoutes);
+router.use("/payroll", payrollRoutes);
+router.use("/settings", settingsRoutes);
 router.get("/ready", getReady);
 
 export default router;

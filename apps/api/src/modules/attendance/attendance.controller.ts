@@ -53,3 +53,8 @@ export async function listAttendanceExceptions(req: Request, res: Response, next
     next(error);
   }
 }
+function ids(value:unknown): string[] { if(!Array.isArray(value)||!value.length||value.some((id)=>typeof id!=="string"))throw new Error("Validation: Select at least one record"); return value; }
+export async function deleteAttendance(req:Request,res:Response,next:NextFunction){try{res.json(await service.deleteAttendance(ids(req.body?.ids)));}catch(e){if(e instanceof Error&&e.message.startsWith("Conflict:")){res.status(409).json({message:e.message.slice(10)});return;}next(e);}}
+export async function clearAttendanceDate(req:Request,res:Response,next:NextFunction){try{res.json(await service.clearAttendanceDate(String(req.body?.date??"")));}catch(e){next(e);}}
+export async function resolveExceptions(req:Request,res:Response,next:NextFunction){try{const raw=req.body?.ids;if(!Array.isArray(raw)||raw.some((id)=>!Number.isInteger(id)))throw new Error("Validation: Select at least one exception");res.json(await service.resolveExceptions(raw,req.user!.id,req.body?.resolution_notes));}catch(e){next(e);}}
+export async function deleteExceptions(req:Request,res:Response,next:NextFunction){try{const raw=req.body?.ids;if(!Array.isArray(raw)||raw.some((id)=>!Number.isInteger(id)))throw new Error("Validation: Select at least one exception");res.json(await service.deleteSafeExceptions(raw));}catch(e){next(e);}}

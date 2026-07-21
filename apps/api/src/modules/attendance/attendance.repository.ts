@@ -258,7 +258,7 @@ async function getRawPunchesForDate(date: string): Promise<RawPunchRow[]> {
       e.name AS employee_name
      FROM raw_attendance_punches p
      LEFT JOIN employees e ON e.biometric_id = p.biometric_id
-     WHERE (p.punch_time AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND ($1::date + INTERVAL '1 day')::date
+     WHERE coalesce(p.ignored,false)=false AND (p.punch_time AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND ($1::date + INTERVAL '1 day')::date
      ORDER BY p.punch_time ASC, p.id ASC`,
     [assertDate(date)],
   );
@@ -276,7 +276,7 @@ async function getRawPunchesForBiometricDate(biometricId: string, date: string):
       e.name AS employee_name
      FROM raw_attendance_punches p
      LEFT JOIN employees e ON e.biometric_id = p.biometric_id
-     WHERE p.biometric_id = $1::bigint
+     WHERE p.biometric_id = $1::bigint AND coalesce(p.ignored,false)=false
        AND (p.punch_time AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $2::date AND ($2::date + INTERVAL '1 day')::date
      ORDER BY p.punch_time ASC, p.id ASC`,
     [biometricId, assertDate(date)],

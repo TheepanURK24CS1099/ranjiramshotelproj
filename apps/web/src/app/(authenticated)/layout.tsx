@@ -4,14 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
+import { PayrollModuleProvider } from "@/components/payroll-module-context";
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<Record<string, string> | null>(null);
+  const [payrollEnabled, setPayrollEnabled] = useState(true);
 
   useEffect(() => {
-    apiClient.get("/auth/me")
-      .then((data) => setUser(data as Record<string, string>))
+    Promise.all([apiClient.get("/auth/me"), apiClient.get("/settings/modules")])
+      .then(([data, modules]) => { setUser(data as Record<string, string>); setPayrollEnabled(Boolean((modules as { enabled?: boolean }).enabled)); })
       .catch(() => router.push("/login"));
   }, [router]);
 
@@ -28,7 +30,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <PayrollModuleProvider value={{ payrollEnabled, setPayrollEnabled }}><div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
       <div className="w-64 bg-gray-800 text-white flex flex-col">
         <div className="p-4 text-xl font-bold border-b border-gray-700">Hotel Admin</div>
@@ -38,6 +40,8 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
           <Link href="/employees" className="block px-4 py-2 rounded hover:bg-gray-700">Employees</Link>
           <Link href="/shifts" className="block px-4 py-2 rounded hover:bg-gray-700">Shifts</Link>
           <Link href="/holidays" className="block px-4 py-2 rounded hover:bg-gray-700">Holidays</Link>
+          {payrollEnabled && <Link href="/payroll" className="block px-4 py-2 rounded hover:bg-gray-700">Payroll</Link>}
+          {user.role === "ADMIN" && <Link href="/settings" className="block px-4 py-2 rounded hover:bg-gray-700">Settings</Link>}
           <Link href="/devices" className="block px-4 py-2 rounded hover:bg-gray-700">Biometric Device</Link>
         </nav>
         <div className="p-4 border-t border-gray-700">
@@ -57,6 +61,6 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
           {children}
         </main>
       </div>
-    </div>
+    </div></PayrollModuleProvider>
   );
 }
