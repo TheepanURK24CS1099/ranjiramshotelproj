@@ -8,5 +8,6 @@ Device-facing routes are unauthenticated by browser session because the machine 
 
 - `GET|POST /iclock/getrequest` records a heartbeat and returns `OK`.
 - `GET|POST /iclock/cdata` records a heartbeat, ingests valid `ATTLOG` rows, and returns `OK: n`.
+- `POST /iclock/devicecmd` records a heartbeat and returns `OK`.
 
 See [the architecture note](../architecture/biometric-devices-adms.md) for parsing, identity, status, deduplication, and device simulation details.

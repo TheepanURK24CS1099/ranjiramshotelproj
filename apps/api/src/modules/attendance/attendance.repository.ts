@@ -56,6 +56,19 @@ export interface AttendanceDashboardSummary {
   unmatchedPunches: number;
 }
 
+export interface AttendanceException {
+  raw_punch_id: number;
+  attendance_date: string;
+  employee_id: string;
+  employee_name: string;
+  biometric_id: number;
+  shift_id: string;
+  shift_name: string;
+  punch_time: Date;
+  exception_type: "OUT_OF_SHIFT";
+  message: string;
+}
+
 type AttendanceUpsertRecord = Omit<AttendanceRecord, "employee_name" | "shift_name">;
 
 function assertDate(value: string): string {
@@ -256,6 +269,57 @@ async function getShiftAssignmentForDate(employeeId: string, date: string): Prom
   return result.rows[0] ?? null;
 }
 
+async function deleteAttendanceExceptionsForRawPunchIds(rawPunchIds: number[]): Promise<void> {
+  if (rawPunchIds.length > 0) {
+    await pool.query("DELETE FROM attendance_exceptions WHERE raw_punch_id = ANY($1::bigint[])", [rawPunchIds]);
+  }
+}
+
+async function isValidPreviousOvernightPunch(employeeId: string, attendanceDate: string, punch: RawPunchRow): Promise<boolean> {
+  const previousDate = addDays(attendanceDate, -1);
+  const previousShift = await getShiftAssignmentForDate(employeeId, previousDate);
+  if (!previousShift || !isOvernightShift(previousShift.start_time, previousShift.end_time, previousShift.is_overnight)) {
+    return false;
+  }
+
+  const previousStart = toUtcFromIstDateTime(previousDate, previousShift.start_time);
+  const previousEnd = toUtcFromIstDateTime(attendanceDate, previousShift.end_time);
+  return punch.punch_time >= previousStart && punch.punch_time <= previousEnd;
+}
+
+async function syncOutOfShiftExceptions(
+  employeeId: string,
+  biometricId: number,
+  attendanceDate: string,
+  shift: ShiftAssignmentRow,
+  localPunches: RawPunchRow[],
+  validPunches: RawPunchRow[],
+): Promise<void> {
+  await deleteAttendanceExceptionsForRawPunchIds(validPunches.map((punch) => punch.id));
+  const validPunchIds = new Set(validPunches.map((punch) => punch.id));
+
+  for (const punch of localPunches) {
+    if (validPunchIds.has(punch.id) || await isValidPreviousOvernightPunch(employeeId, attendanceDate, punch)) {
+      continue;
+    }
+
+    await pool.query(
+      `INSERT INTO attendance_exceptions (
+        raw_punch_id, attendance_date, employee_id, biometric_id, shift_id, punch_time, exception_type, message
+      ) VALUES ($1, $2::date, $3, $4, $5, $6, 'OUT_OF_SHIFT', 'Punch recorded outside assigned shift window')
+      ON CONFLICT (raw_punch_id) DO UPDATE SET
+        attendance_date = EXCLUDED.attendance_date,
+        employee_id = EXCLUDED.employee_id,
+        biometric_id = EXCLUDED.biometric_id,
+        shift_id = EXCLUDED.shift_id,
+        punch_time = EXCLUDED.punch_time,
+        exception_type = EXCLUDED.exception_type,
+        message = EXCLUDED.message`,
+      [punch.id, attendanceDate, employeeId, biometricId, shift.shift_id, punch.punch_time],
+    );
+  }
+}
+
 export async function rebuildAttendanceForDate(date: string): Promise<void> {
   const attendanceDate = assertDate(date);
   const rawPunches = await getRawPunchesForDate(attendanceDate);
@@ -323,6 +387,8 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
     const shiftEnd = toUtcFromIstDateTime(shiftEndDate, shift.end_time);
     const windowEnd = attendanceWindowEnd(shiftEnd, overnight);
     const punchesInWindow = sortPunches(dateWindowPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= windowEnd));
+
+    await syncOutOfShiftExceptions(punch.employee_id, Number(punch.biometric_id), attendanceDate, shift, localPunches, punchesInWindow);
 
     if (punchesInWindow.length === 0) {
       continue;
@@ -445,6 +511,8 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
   const windowEnd = attendanceWindowEnd(shiftEnd, overnight);
   const punchesInWindow = sortPunches(rawPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= windowEnd));
 
+  await syncOutOfShiftExceptions(firstPunch.employee_id, Number(firstPunch.biometric_id), attendanceDate, shift, localPunches, punchesInWindow);
+
   if (punchesInWindow.length === 0) {
     return;
   }
@@ -514,6 +582,30 @@ export async function listAttendance(filters: AttendanceFilters): Promise<Attend
      WHERE ${clauses.join(" AND ")}
      ORDER BY a.status ASC, a.punch_in_at ASC NULLS LAST, a.biometric_id ASC, a.attendance_key ASC`,
     params,
+  );
+
+  return result.rows;
+}
+
+export async function listAttendanceExceptions(date: string): Promise<AttendanceException[]> {
+  const result = await pool.query<AttendanceException>(
+    `SELECT
+      x.raw_punch_id,
+      x.attendance_date::text AS attendance_date,
+      x.employee_id,
+      e.name AS employee_name,
+      x.biometric_id,
+      x.shift_id,
+      s.name AS shift_name,
+      x.punch_time,
+      x.exception_type,
+      x.message
+     FROM attendance_exceptions x
+     JOIN employees e ON e.id = x.employee_id
+     JOIN shifts s ON s.id = x.shift_id
+     WHERE x.attendance_date = $1::date
+     ORDER BY x.punch_time ASC, x.raw_punch_id ASC`,
+    [assertDate(date)],
   );
 
   return result.rows;

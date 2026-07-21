@@ -31,3 +31,17 @@ export async function listAttendance(req: Request, res: Response, next: NextFunc
     next(error);
   }
 }
+
+export async function listAttendanceExceptions(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = attendanceQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ message: "Validation failed", errors: parsed.error.issues });
+      return;
+    }
+
+    res.json(await service.getAttendanceExceptions(parsed.data.date ?? currentIstDate()));
+  } catch (error) {
+    next(error);
+  }
+}

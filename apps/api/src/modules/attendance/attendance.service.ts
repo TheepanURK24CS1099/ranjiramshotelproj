@@ -1,5 +1,5 @@
 import * as repository from "./attendance.repository.js";
-import type { AttendanceDashboardSummary, AttendanceFilters, AttendanceRecord, AttendanceStatus } from "./attendance.repository.js";
+import type { AttendanceDashboardSummary, AttendanceException, AttendanceFilters, AttendanceRecord, AttendanceStatus } from "./attendance.repository.js";
 
 const IST_OFFSET_MS = 330 * 60_000;
 
@@ -9,6 +9,10 @@ function currentIstDate(): string {
 
 export async function getAttendance(filters: AttendanceFilters): Promise<AttendanceRecord[]> {
   return await repository.listAttendance(filters);
+}
+
+export async function getAttendanceExceptions(date: string): Promise<AttendanceException[]> {
+  return await repository.listAttendanceExceptions(date);
 }
 
 export async function getAttendanceSummary(date?: string): Promise<AttendanceDashboardSummary> {

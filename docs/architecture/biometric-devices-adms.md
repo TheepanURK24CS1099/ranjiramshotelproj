@@ -8,7 +8,7 @@ Part 12 registers biometric machines and receives their raw events. It deliberat
 
 ## Request flow
 
-The isolated `/iclock` router accepts heartbeat polling at `GET /iclock/getrequest` and uploads at `/iclock/cdata`. The `SN` query parameter may match a configured device code or serial number, case-insensitively. Unknown and inactive devices receive a small plain-text error and are not created. The router accepts raw text and URL-encoded `ATTLOG`/`data` payloads with a configurable 64 KB default limit. The vendor parser supports the common tab-delimited record: `PIN`, local machine timestamp, punch state, verify mode, followed by optional vendor fields.
+The isolated `/iclock` router accepts heartbeat polling at `GET /iclock/getrequest`, uploads at `/iclock/cdata`, and `POST /iclock/devicecmd` polling. The `SN` query parameter may match a configured device code or serial number, case-insensitively. Unknown and inactive devices receive a small plain-text error and are not created. The router accepts raw text and URL-encoded `ATTLOG`/`data` payloads with a configurable 64 KB default limit. The vendor parser supports the common tab-delimited record: `PIN`, local machine timestamp, punch state, verify mode, followed by optional vendor fields.
 
 Every accepted request updates `last_seen`, `last_ip`, and stored status to `ONLINE`. The machine's timezone-less timestamps use `ADMS_TIMEZONE_OFFSET` (default India `+05:30`) and are stored as UTC `timestamptz` values. Each original record is retained in `raw_payload.payload`.
 

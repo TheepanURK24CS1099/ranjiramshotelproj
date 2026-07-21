@@ -22,6 +22,16 @@ type AttendanceRow = {
   status: AttendanceStatus;
 };
 
+type AttendanceException = {
+  raw_punch_id: number;
+  employee_name: string;
+  biometric_id: number;
+  shift_name: string;
+  punch_time: string;
+  exception_type: "OUT_OF_SHIFT";
+  message: string;
+};
+
 type EmployeeOption = { id: string; name: string; biometric_id: number };
 type ShiftOption = { id: string; name: string };
 
@@ -37,6 +47,7 @@ const statusOptions: Array<{ value: AttendanceStatus | ""; label: string }> = [
 
 export default function AttendancePage() {
   const [rows, setRows] = useState<AttendanceRow[]>([]);
+  const [exceptions, setExceptions] = useState<AttendanceException[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [shifts, setShifts] = useState<ShiftOption[]>([]);
   const [date, setDate] = useState(istToday);
@@ -71,8 +82,12 @@ export default function AttendancePage() {
       setLoading(true);
       setError("");
       try {
-        const data = await apiClient.get(`/attendance?${query}`);
+        const [data, exceptionData] = await Promise.all([
+          apiClient.get(`/attendance?${query}`),
+          apiClient.get(`/attendance/exceptions?date=${encodeURIComponent(date)}`),
+        ]);
         setRows(data as AttendanceRow[]);
+        setExceptions(exceptionData as AttendanceException[]);
       } catch {
         setError("Failed to load attendance records");
       } finally {
@@ -81,7 +96,7 @@ export default function AttendancePage() {
     };
 
     void loadAttendance();
-  }, [query]);
+  }, [query, date]);
 
   return (
     <div className="space-y-6">
@@ -156,6 +171,7 @@ export default function AttendancePage() {
                 <th className="p-3 font-medium text-gray-500">Shift</th>
                 <th className="p-3 font-medium text-gray-500">Punch In</th>
                 <th className="p-3 font-medium text-gray-500">Punch Out</th>
+                <th className="p-3 font-medium text-gray-500">Punches</th>
                 <th className="p-3 font-medium text-gray-500">Working Hours</th>
                 <th className="p-3 font-medium text-gray-500">Status</th>
               </tr>
@@ -169,6 +185,7 @@ export default function AttendancePage() {
                   <td className="p-3">{row.shift_name ?? "—"}</td>
                   <td className="p-3">{formatTimeOnly(row.punch_in_at)}</td>
                   <td className="p-3">{formatTimeOnly(row.punch_out_at)}</td>
+                  <td className="p-3">{row.raw_punch_count}</td>
                   <td className="p-3">{formatWorkingMinutes(row.working_minutes)}</td>
                   <td className="p-3">
                     <span
@@ -189,8 +206,52 @@ export default function AttendancePage() {
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-5 text-center text-gray-500">
+                  <td colSpan={9} className="p-5 text-center text-gray-500">
                     No attendance records found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white rounded shadow overflow-hidden">
+        <div className="border-b px-5 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Attendance Exceptions</h2>
+            <p className="text-sm text-gray-500">Raw punches outside the assigned shift window are preserved here.</p>
+          </div>
+          <div className="text-sm text-gray-500">{exceptions.length} exception{exceptions.length === 1 ? "" : "s"}</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="p-3 font-medium text-gray-500">Employee</th>
+                <th className="p-3 font-medium text-gray-500">Biometric ID</th>
+                <th className="p-3 font-medium text-gray-500">Shift</th>
+                <th className="p-3 font-medium text-gray-500">Punch Time</th>
+                <th className="p-3 font-medium text-gray-500">Note / Exception</th>
+              </tr>
+            </thead>
+            <tbody>
+              {exceptions.map((exception) => (
+                <tr key={exception.raw_punch_id} className="border-t">
+                  <td className="p-3">{exception.employee_name}</td>
+                  <td className="p-3 font-medium">{exception.biometric_id}</td>
+                  <td className="p-3">{exception.shift_name}</td>
+                  <td className="p-3">{formatTimeOnly(exception.punch_time)}</td>
+                  <td className="p-3">
+                    <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">OUT OF SHIFT</span>
+                    <span className="ml-2 text-gray-600">{exception.message}</span>
+                  </td>
+                </tr>
+              ))}
+              {!loading && exceptions.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-5 text-center text-gray-500">
+                    No attendance exceptions found.
                   </td>
                 </tr>
               )}
