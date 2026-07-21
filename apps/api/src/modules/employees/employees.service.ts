@@ -11,13 +11,15 @@ export async function getEmployeeById(id: string): Promise<Employee | null> {
 
 export async function createEmployee(
   employeeData: Omit<Employee, "id" | "created_at" | "updated_at">,
-  initialShift?: { shift_id: string; effective_from: string }
+  initialShift?: { shift_id: string; effective_from: string },
+  initialSalary?: { salary_type: "MONTHLY" | "DAILY" | "HOURLY"; monthly_salary?: number | undefined; daily_rate?: number | undefined; hourly_rate?: number | undefined; effective_from: string; notes?: string | null | undefined },
+  openingAdvance?: { amount: number; transaction_date: string; notes?: string | null | undefined; created_by: string },
 ): Promise<Employee> {
   const existing = await employeesRepository.getEmployeeByBiometricId(employeeData.biometric_id);
   if (existing) {
     throw new Error("Conflict: Employee with this biometric ID already exists");
   }
-  return await employeesRepository.createEmployee(employeeData, initialShift);
+  return await employeesRepository.createEmployee(employeeData, initialShift, initialSalary, openingAdvance);
 }
 
 export async function updateEmployee(id: string, employeeData: Partial<Omit<Employee, "id" | "created_at" | "updated_at">>): Promise<Employee | null> {

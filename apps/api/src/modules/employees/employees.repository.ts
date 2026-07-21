@@ -93,7 +93,9 @@ export async function getEmployeeByBiometricId(biometricId: number): Promise<Emp
 
 export async function createEmployee(
   employee: Omit<Employee, "id" | "created_at" | "updated_at">,
-  initialShift?: { shift_id: string; effective_from: string }
+  initialShift?: { shift_id: string; effective_from: string },
+  initialSalary?: { salary_type: "MONTHLY" | "DAILY" | "HOURLY"; monthly_salary?: number | undefined; daily_rate?: number | undefined; hourly_rate?: number | undefined; effective_from: string; notes?: string | null | undefined },
+  openingAdvance?: { amount: number; transaction_date: string; notes?: string | null | undefined; created_by: string },
 ): Promise<Employee> {
   const client = await pool.connect();
   try {
@@ -122,6 +124,22 @@ export async function createEmployee(
         `INSERT INTO employee_shift_assignments (employee_id, shift_id, effective_from)
          VALUES ($1, $2, $3)`,
         [newEmp.id, initialShift.shift_id, initialShift.effective_from]
+      );
+    }
+
+    if (initialSalary) {
+      await client.query(
+        `INSERT INTO employee_salary_history(employee_id,salary_type,monthly_salary,daily_rate,hourly_rate,effective_from,active,notes)
+         VALUES($1,$2,$3,$4,$5,$6::date,true,$7)`,
+        [newEmp.id, initialSalary.salary_type, initialSalary.monthly_salary ?? null, initialSalary.daily_rate ?? null, initialSalary.hourly_rate ?? null, initialSalary.effective_from, initialSalary.notes ?? null],
+      );
+    }
+
+    if (openingAdvance) {
+      await client.query(
+        `INSERT INTO employee_advance_transactions(employee_id,transaction_type,amount,transaction_date,notes,created_by)
+         VALUES($1,'OPENING_ADVANCE',$2,$3::date,$4,$5)`,
+        [newEmp.id, openingAdvance.amount.toFixed(2), openingAdvance.transaction_date, openingAdvance.notes ?? null, openingAdvance.created_by],
       );
     }
 
@@ -161,7 +179,7 @@ export async function updateEmployeeStatus(id: string, active: boolean): Promise
 }
 
 export async function deleteEmployeeIfUnused(id: string): Promise<boolean> {
-  const history = await pool.query("SELECT 1 FROM daily_attendance_records WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_shift_assignments WHERE employee_id=$1 UNION ALL SELECT 1 FROM salary_history WHERE employee_id=$1 UNION ALL SELECT 1 FROM advance_transactions WHERE employee_id=$1 LIMIT 1", [id]);
+  const history = await pool.query("SELECT 1 FROM daily_attendance_records WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_shift_assignments WHERE employee_id=$1 UNION ALL SELECT 1 FROM salary_history WHERE employee_id=$1 UNION ALL SELECT 1 FROM advance_transactions WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_salary_history WHERE employee_id=$1 UNION ALL SELECT 1 FROM employee_advance_transactions WHERE employee_id=$1 LIMIT 1", [id]);
   if (history.rowCount) throw new Error("Cannot delete this employee because historical records exist. Deactivate the employee instead.");
   return (await pool.query("DELETE FROM employees WHERE id=$1 RETURNING id", [id])).rowCount === 1;
 }

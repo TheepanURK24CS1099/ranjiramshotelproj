@@ -40,10 +40,15 @@ export async function createEmployee(req: Request, res: Response, next: NextFunc
       return;
     }
 
-    const { initial_shift, ...employeeData } = validationResult.data;
+    const { initial_shift, initial_salary, opening_advance, ...employeeData } = validationResult.data;
 
     // Explicit typing for mapped object to align with repository signature
-    const newEmployee = await employeesService.createEmployee(employeeData as unknown as Parameters<typeof employeesService.createEmployee>[0], initial_shift);
+    const newEmployee = await employeesService.createEmployee(
+      employeeData as unknown as Parameters<typeof employeesService.createEmployee>[0],
+      initial_shift,
+      initial_salary,
+      opening_advance ? { ...opening_advance, created_by: req.user!.id } : undefined,
+    );
     res.status(201).json(newEmployee);
   } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith("Conflict:")) {

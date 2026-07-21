@@ -1,6 +1,8 @@
 import { Router } from "express";
 import * as employeesController from "./employees.controller.js";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
+import salariesRoutes from "../salaries/salaries.routes.js";
+import advancesRoutes from "../advances/advances.routes.js";
 
 const router = Router();
 
@@ -8,6 +10,8 @@ const router = Router();
 router.get("/", requireAuth, requireRole("ADMIN", "MANAGER"), employeesController.getEmployees);
 router.get("/:id", requireAuth, requireRole("ADMIN", "MANAGER"), employeesController.getEmployeeById);
 router.get("/:id/shift-assignments", requireAuth, requireRole("ADMIN", "MANAGER"), employeesController.getEmployeeShiftAssignments);
+router.use("/:employeeId/salaries", salariesRoutes);
+router.use("/:employeeId/advances", advancesRoutes);
 
 // Only ADMIN can create/update
 router.post("/", requireAuth, requireRole("ADMIN"), employeesController.createEmployee);

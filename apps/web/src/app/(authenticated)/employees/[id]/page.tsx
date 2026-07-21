@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatShiftTime } from "@/lib/format";
 import { ConfirmationModal } from "@/components/confirmation-modal";
+import { EmployeeFinancials } from "@/components/employee-financials";
 
 export default function EditEmployeePage() {
   const router = useRouter();
@@ -242,6 +243,7 @@ export default function EditEmployeePage() {
           </tbody>
         </table>
       </div>
+      <EmployeeFinancials employeeId={id} />
       <ConfirmationModal
         open={showDeleteConfirmation}
         recordName={String(employee.name)}

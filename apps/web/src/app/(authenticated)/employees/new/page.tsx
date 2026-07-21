@@ -21,6 +21,13 @@ export default function NewEmployeePage() {
     weekly_off_day: "",
     shift_id: "",
     effective_from: "",
+    salary_type: "MONTHLY",
+    salary_amount: "",
+    salary_effective_from: "",
+    salary_notes: "",
+    opening_advance: "",
+    opening_advance_date: "",
+    opening_advance_notes: "",
   });
 
   useEffect(() => {
@@ -55,6 +62,34 @@ export default function NewEmployeePage() {
       };
     } else if (formData.shift_id || formData.effective_from) {
       setError("Both Shift and Effective Date are required if assigning a shift.");
+      setLoading(false);
+      return;
+    }
+
+    if (formData.salary_amount && formData.salary_effective_from) {
+      const initialSalary: Record<string, unknown> = {
+        salary_type: formData.salary_type,
+        effective_from: formData.salary_effective_from,
+        notes: formData.salary_notes || undefined,
+      };
+      if (formData.salary_type === "MONTHLY") initialSalary.monthly_salary = Number(formData.salary_amount);
+      if (formData.salary_type === "DAILY") initialSalary.daily_rate = Number(formData.salary_amount);
+      if (formData.salary_type === "HOURLY") initialSalary.hourly_rate = Number(formData.salary_amount);
+      payload.initial_salary = initialSalary;
+    } else if (formData.salary_amount || formData.salary_effective_from) {
+      setError("Salary amount and effective date are both required when adding a salary.");
+      setLoading(false);
+      return;
+    }
+
+    if (formData.opening_advance && formData.opening_advance_date) {
+      payload.opening_advance = {
+        amount: Number(formData.opening_advance),
+        transaction_date: formData.opening_advance_date,
+        notes: formData.opening_advance_notes || undefined,
+      };
+    } else if (formData.opening_advance || formData.opening_advance_date) {
+      setError("Opening Advance amount and date are both required.");
       setLoading(false);
       return;
     }
@@ -125,6 +160,26 @@ export default function NewEmployeePage() {
               <label className="block text-sm font-medium text-gray-700">Effective From</label>
               <input type="date" name="effective_from" value={formData.effective_from} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" />
             </div>
+          </div>
+        </div>
+
+        <div className="pt-6 border-t space-y-4">
+          <h2 className="text-lg font-medium">Initial Salary (Optional)</h2>
+          <p className="text-sm text-gray-600">Monthly salary is the default. Daily and hourly rates are available for future use.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div><label className="block text-sm font-medium text-gray-700">Salary Type</label><select name="salary_type" value={formData.salary_type} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded"><option value="MONTHLY">Monthly</option><option value="DAILY">Daily</option><option value="HOURLY">Hourly</option></select></div>
+            <div><label className="block text-sm font-medium text-gray-700">{formData.salary_type === "MONTHLY" ? "Monthly Salary" : formData.salary_type === "DAILY" ? "Daily Rate" : "Hourly Rate"}</label><input type="number" min="0.01" step="0.01" name="salary_amount" value={formData.salary_amount} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
+            <div><label className="block text-sm font-medium text-gray-700">Effective Date</label><input type="date" name="salary_effective_from" value={formData.salary_effective_from} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
+            <div><label className="block text-sm font-medium text-gray-700">Notes</label><input name="salary_notes" value={formData.salary_notes} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
+          </div>
+        </div>
+
+        <div className="pt-6 border-t space-y-4">
+          <h2 className="text-lg font-medium">Opening Advance (Optional)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div><label className="block text-sm font-medium text-gray-700">Opening Advance Amount</label><input type="number" min="0.01" step="0.01" name="opening_advance" value={formData.opening_advance} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
+            <div><label className="block text-sm font-medium text-gray-700">Opening Advance Date</label><input type="date" name="opening_advance_date" value={formData.opening_advance_date} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
+            <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700">Notes</label><input name="opening_advance_notes" value={formData.opening_advance_notes} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" /></div>
           </div>
         </div>
 
