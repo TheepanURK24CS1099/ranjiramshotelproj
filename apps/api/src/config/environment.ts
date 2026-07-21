@@ -140,6 +140,7 @@ const environmentSchema = z.object({
   DEVICE_STATUS_CHECK_INTERVAL_MS: z.preprocess(parseInteger, z.number().int().min(1000).default(60 * 1000)),
   ADMS_BODY_LIMIT: z.string().regex(/^\d+(b|kb|mb)$/i).default("64kb"),
   ADMS_TIMEZONE_OFFSET: z.string().regex(/^[+-](0\d|1[0-4]):[0-5]\d$/).default("+05:30"),
+  ATTENDANCE_CHECKOUT_WINDOW_MINUTES: z.preprocess(parseInteger, z.number().int().min(0).max(12 * 60).default(6 * 60)),
 });
 
 export function parseEnvironment(input: Record<string, unknown>) {
