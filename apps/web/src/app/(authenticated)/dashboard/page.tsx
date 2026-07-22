@@ -20,6 +20,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState("");
   const [device, setDevice] = useState<Record<string, string | boolean | null> | null>(null);
+  const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
     Promise.all([apiClient.get("/dashboard/summary"), apiClient.get("/devices")])
@@ -27,12 +28,17 @@ export default function DashboardPage() {
       .catch(() => setError("Failed to load dashboard data"));
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   if (error) return <div className="text-red-500">{error}</div>;
   if (!summary) return <div>Loading...</div>;
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-6">Dashboard Summary</h1>
+      <div className="mb-6 flex items-start justify-between gap-4"><h1 className="text-2xl font-semibold">Dashboard Summary</h1><div className="text-right text-sm text-gray-600"><div className="font-medium">Current Time (IST)</div><div>{now ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "medium", hour12: true, timeZone: "Asia/Kolkata" }).format(now) : "—"}</div></div></div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded shadow">
           <div className="text-gray-500 text-sm font-medium uppercase">Total Employees</div>

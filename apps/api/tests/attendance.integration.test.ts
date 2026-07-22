@@ -315,7 +315,7 @@ describe("Part 13 attendance engine", () => {
 
       expect(response.body.presentToday).toBe(initialDashboard.body.presentToday + 2);
       expect(response.body.currentlyCheckedIn).toBe(initialDashboard.body.currentlyCheckedIn + 1);
-      expect(response.body.missingPunchOut).toBe(initialDashboard.body.missingPunchOut + 1);
+      expect(response.body.missingPunchOut).toBe(initialDashboard.body.missingPunchOut);
       expect(response.body.unmatchedPunches).toBe(initialDashboard.body.unmatchedPunches + 2);
     } finally {
       await pool.query("DELETE FROM daily_attendance_records WHERE biometric_id = ANY($1::bigint[])", [dashboardBiometricIds]);

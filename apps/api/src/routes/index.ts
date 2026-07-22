@@ -11,6 +11,7 @@ import attendanceRoutes from "../modules/attendance/attendance.routes.js";
 import holidaysRoutes from "../modules/holidays/holidays.routes.js";
 import payrollRoutes from "../modules/payroll/payroll.routes.js";
 import settingsRoutes from "../modules/settings/settings.routes.js";
+import reportsRoutes from "../modules/reports/reports.routes.js";
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.use("/attendance", attendanceRoutes);
 router.use("/holidays", holidaysRoutes);
 router.use("/payroll", payrollRoutes);
 router.use("/settings", settingsRoutes);
+router.use("/reports", reportsRoutes);
 router.get("/ready", getReady);
 
 export default router;
