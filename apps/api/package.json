@@ -16,6 +16,7 @@
     "db:migrate": "tsx src/scripts/migrate.ts up",
     "db:migrate:status": "tsx src/scripts/migrate.ts status",
     "db:migrate:down": "tsx src/scripts/migrate.ts down",
+    "db:cleanup-part18": "tsx src/scripts/cleanup-part18.ts",
     "auth:create-admin": "tsx src/scripts/auth-create-admin.ts"
   },
   "dependencies": {
@@ -26,6 +27,7 @@
     "express": "5.2.1",
     "express-rate-limit": "8.6.0",
     "helmet": "8.3.0",
+    "pdfkit": "^0.19.1",
     "pg": "8.22.0",
     "pino": "10.3.1",
     "pino-http": "11.0.0",

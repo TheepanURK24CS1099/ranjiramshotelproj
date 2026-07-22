@@ -6,7 +6,7 @@ import { apiClient } from "@/lib/api-client";
 import { formatAttendanceDate, formatTimeOnly, formatWorkingMinutes } from "@/lib/format";
 import { ConfirmationModal } from "@/components/confirmation-modal";
 
-type AttendanceStatus = "PRESENT" | "MISSING_PUNCH" | "UNMATCHED" | "NO_SHIFT";
+type AttendanceStatus = "PRESENT" | "CURRENTLY_CHECKED_IN" | "MISSING_PUNCH" | "UNMATCHED" | "NO_SHIFT";
 
 type AttendanceRow = {
   attendance_key: string;
@@ -261,7 +261,9 @@ export default function AttendancePage() {
                       className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
                         row.status === "PRESENT"
                           ? "bg-green-100 text-green-800"
-                          : row.status === "MISSING_PUNCH"
+                          : row.status === "CURRENTLY_CHECKED_IN"
+                            ? "bg-blue-100 text-blue-800"
+                            : row.status === "MISSING_PUNCH"
                             ? "bg-yellow-100 text-yellow-800"
                             : row.status === "NO_SHIFT"
                               ? "bg-blue-100 text-blue-800"

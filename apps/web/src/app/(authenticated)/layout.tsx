@@ -37,6 +37,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
         <nav className="flex-1 p-4 space-y-2">
           <Link href="/dashboard" className="block px-4 py-2 rounded hover:bg-gray-700">Dashboard</Link>
           <Link href="/attendance" className="block px-4 py-2 rounded hover:bg-gray-700">Attendance</Link>
+          <Link href="/reports" className="block px-4 py-2 rounded hover:bg-gray-700">Reports</Link>
           <Link href="/employees" className="block px-4 py-2 rounded hover:bg-gray-700">Employees</Link>
           <Link href="/shifts" className="block px-4 py-2 rounded hover:bg-gray-700">Shifts</Link>
           <Link href="/holidays" className="block px-4 py-2 rounded hover:bg-gray-700">Holidays</Link>
