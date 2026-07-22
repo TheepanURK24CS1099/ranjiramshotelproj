@@ -141,6 +141,9 @@ const environmentSchema = z.object({
   ADMS_BODY_LIMIT: z.string().regex(/^\d+(b|kb|mb)$/i).default("64kb"),
   ADMS_TIMEZONE_OFFSET: z.string().regex(/^[+-](0\d|1[0-4]):[0-5]\d$/).default("+05:30"),
   ATTENDANCE_CHECKOUT_WINDOW_MINUTES: z.preprocess(parseInteger, z.number().int().min(0).max(12 * 60).default(6 * 60)),
+  ATTENDANCE_SCHEDULER_ENABLED: z.preprocess(parseBoolean, z.boolean().default(false)),
+  ATTENDANCE_SCHEDULER_CRON: z.string().default("* * * * *"),
+  ATTENDANCE_SCHEDULER_TIMEZONE: z.literal("Asia/Kolkata").default("Asia/Kolkata"),
 });
 
 export function parseEnvironment(input: Record<string, unknown>) {

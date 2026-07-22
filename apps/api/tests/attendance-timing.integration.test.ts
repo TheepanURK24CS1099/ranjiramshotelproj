@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getDatabasePool } from "../src/infrastructure/database/database.js";
 import * as attendance from "../src/modules/attendance/attendance.repository.js";
 
-const pool=getDatabasePool(); const marker=`timing-${crypto.randomUUID()}`; const day="2994-06-10"; let shift="",employee="",bio=crypto.randomInt(810000000,890000000);
+const pool=getDatabasePool(); const marker=`timing-${crypto.randomUUID()}`; const day="2994-06-10"; let shift="",employee=""; const bio=crypto.randomInt(810000000,890000000);
 const now=(time:string)=>{process.env.ATTENDANCE_TEST_NOW=`${day}T${time}`;};
 async function reset(){await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1 AND attendance_date=$2",[employee,day]);await pool.query("DELETE FROM raw_attendance_punches WHERE source_event_key LIKE $1",[`${marker}%`]);}
 async function punch(time:string,key:string){await pool.query("INSERT INTO raw_attendance_punches(biometric_id,punch_time,source_event_key) VALUES($1,$2,$3)",[bio,`${day}T${time}`,`${marker}-${key}`]);}
@@ -13,8 +13,8 @@ it("one punch before shift end is currently checked in",async()=>{await reset();
 it("one punch in buffer is currently checked in",async()=>{await reset();now("12:40:00Z");await punch("03:35:00Z","buffer");expect((await rebuild()).status).toBe("CURRENTLY_CHECKED_IN");});
 it("one punch after buffer is missing",async()=>{await reset();now("12:46:00Z");await punch("03:35:00Z","late");expect(await rebuild()).toMatchObject({status:"MISSING_PUNCH",note:"Missing punch out"});});
 it("two punches are present with worked minutes",async()=>{await reset();now("13:00:00Z");await punch("03:35:00Z","in");await punch("12:30:00Z","out");expect(await rebuild()).toMatchObject({status:"PRESENT",working_minutes:535});});
-it("zero punches before shift remains unfinalized",async()=>{await reset();now("02:00:00Z");await attendance.rebuildAttendanceForAllActiveEmployees(day);expect(await rebuild()).toBeUndefined();});
-it("zero punches during shift remains unfinalized",async()=>{await reset();now("08:00:00Z");await attendance.rebuildAttendanceForAllActiveEmployees(day);expect(await rebuild()).toBeUndefined();});
+it("zero punches before shift is pending",async()=>{await reset();now("02:00:00Z");await attendance.rebuildAttendanceForAllActiveEmployees(day);expect(await rebuild()).toMatchObject({status:"PENDING",note:"Shift not started"});});
+it("zero punches during shift is check-in missing",async()=>{await reset();now("08:00:00Z");await attendance.rebuildAttendanceForAllActiveEmployees(day);expect(await rebuild()).toMatchObject({status:"CHECK_IN_MISSING",note:"Check-in fingerprint missing"});});
 it("zero punches after deadline is absent",async()=>{await reset();now("13:00:00Z");await attendance.rebuildAttendanceForAllActiveEmployees(day);expect((await rebuild()).status).toBe("ABSENT");});
 it("overnight before deadline is covered by IST date logic",async()=>{expect(process.env.ATTENDANCE_TEST_NOW).toBeTruthy();});
 it("overnight after deadline is covered by completed-date logic",async()=>{now("13:00:00Z");expect(process.env.ATTENDANCE_TEST_NOW).toContain(day);});

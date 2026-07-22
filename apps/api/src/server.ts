@@ -5,6 +5,7 @@ import { env } from "./config/environment.js";
 import { logger } from "./config/logger.js";
 import { closeDatabasePool } from "./infrastructure/database/database.js";
 import { startDeviceStatusMonitor, stopDeviceStatusMonitor } from "./modules/devices/device-status.service.js";
+import { startAttendanceStatusScheduler, stopAttendanceStatusScheduler } from "./modules/attendance/attendance-scheduler.service.js";
 
 const serviceName = "hotel-api";
 
@@ -36,6 +37,7 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
       await closeServer(server);
     }
     stopDeviceStatusMonitor();
+    stopAttendanceStatusScheduler();
 
     await closeDatabasePool();
 
@@ -49,6 +51,7 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
 
 function startServer(): void {
   startDeviceStatusMonitor();
+  startAttendanceStatusScheduler();
   server = createServer(app);
 
   server.once("error", (error) => {

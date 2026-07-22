@@ -16,6 +16,7 @@ const initialSalarySchema = z.object({
 });
 
 export const createEmployeeSchema = z.object({
+  employee_code: z.string().trim().min(1).max(100).optional().nullable(),
   biometric_id: z.number().int().positive(),
   name: z.string().min(1, "Name is required").max(255),
   phone: z.string().max(50).optional().nullable(),

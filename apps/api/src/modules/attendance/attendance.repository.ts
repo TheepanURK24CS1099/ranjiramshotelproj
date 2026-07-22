@@ -7,7 +7,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MISSING_PUNCH_BUFFER_MINUTES = 15;
 function attendanceNow(): Date { const value = process.env.ATTENDANCE_TEST_NOW; return value ? new Date(value) : new Date(); }
 
-export type AttendanceStatus = "PRESENT" | "LATE" | "EARLY_EXIT" | "LATE_AND_EARLY_EXIT" | "HALF_DAY" | "ABSENT" | "MISSING_PUNCH" | "CURRENTLY_CHECKED_IN" | "WEEKLY_OFF" | "HOLIDAY" | "NO_SHIFT" | "UNMATCHED";
+export type AttendanceStatus = "PRESENT" | "LATE" | "EARLY_EXIT" | "LATE_AND_EARLY_EXIT" | "HALF_DAY" | "ABSENT" | "MISSING_PUNCH" | "CURRENTLY_CHECKED_IN" | "PENDING" | "CHECK_IN_MISSING" | "WEEKLY_OFF" | "HOLIDAY" | "NO_SHIFT" | "UNMATCHED";
 
 export interface AttendanceRecord {
   attendance_key: string;
@@ -15,6 +15,7 @@ export interface AttendanceRecord {
   biometric_id: number;
   employee_id: string | null;
   employee_name: string | null;
+  employee_code: string;
   shift_id: string | null;
   shift_name: string | null;
   punch_in_at: Date | null;
@@ -80,7 +81,7 @@ export interface AttendanceException {
   message: string;
 }
 
-type AttendanceUpsertRecord = Omit<AttendanceRecord, "employee_name" | "shift_name" | "late_minutes" | "early_exit_minutes" | "note" | "holiday_id"> & Partial<Pick<AttendanceRecord, "late_minutes" | "early_exit_minutes" | "note" | "holiday_id">>;
+type AttendanceUpsertRecord = Omit<AttendanceRecord, "employee_name" | "employee_code" | "shift_name" | "late_minutes" | "early_exit_minutes" | "note" | "holiday_id"> & Partial<Pick<AttendanceRecord, "late_minutes" | "early_exit_minutes" | "note" | "holiday_id">>;
 
 function assertDate(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
@@ -164,7 +165,7 @@ function attendanceWindowEnd(shiftEnd: Date, overnight: boolean, checkoutAfterMi
 }
 
 function attendanceStatusForPunches(first: RawPunchRow, last: RawPunchRow, shiftStart: Date, shiftEnd: Date, shift: ShiftAssignmentRow): { status: AttendanceStatus; lateMinutes: number; earlyExitMinutes: number; note: string | null } {
-  if (first.id === last.id) { const now=attendanceNow(); const deadline=new Date(shiftEnd.getTime()+MISSING_PUNCH_BUFFER_MINUTES*60_000); const historical=toIstDateKey(shiftStart)!==toIstDateKey(now); return now<deadline&&!historical ? { status: "CURRENTLY_CHECKED_IN", lateMinutes: 0, earlyExitMinutes: 0, note: "Awaiting punch out" } : { status: "MISSING_PUNCH", lateMinutes: 0, earlyExitMinutes: 0, note: "Missing punch out" }; }
+  if (first.id === last.id) { const now=attendanceNow(); const deadline=new Date(shiftEnd.getTime()+MISSING_PUNCH_BUFFER_MINUTES*60_000); const lateMinutes=Math.max(0,minutesBetween(new Date(shiftStart.getTime()+shift.grace_minutes*60_000),first.punch_time)); return now<deadline ? { status: "CURRENTLY_CHECKED_IN", lateMinutes, earlyExitMinutes: 0, note: lateMinutes ? `Late by ${lateMinutes} minutes; awaiting punch out` : "Awaiting punch out" } : { status: "MISSING_PUNCH", lateMinutes, earlyExitMinutes: 0, note: "Missing punch out" }; }
   // Existing shifts with no configured attendance rules retain the validated Part 13 PRESENT behavior.
   if (shift.grace_minutes === 0 && shift.minimum_work_minutes === 0 && shift.early_exit_tolerance_minutes === 0) {
     return { status: "PRESENT", lateMinutes: 0, earlyExitMinutes: 0, note: null };
@@ -425,7 +426,8 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
     const shiftEndDate = overnight ? addDays(attendanceDate, 1) : attendanceDate;
     const shiftEnd = toUtcFromIstDateTime(shiftEndDate, shift.end_time);
     const windowEnd = attendanceWindowEnd(shiftEnd, overnight, shift.checkout_after_minutes);
-    const punchesInWindow = sortPunches(dateWindowPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= windowEnd));
+    const windowStart = new Date(shiftStart.getTime() - shift.checkin_before_minutes * 60_000);
+    const punchesInWindow = sortPunches(dateWindowPunches.filter((entry) => entry.punch_time >= windowStart && entry.punch_time <= windowEnd));
 
     await syncOutOfShiftExceptions(punch.employee_id, Number(punch.biometric_id), attendanceDate, shift, localPunches, punchesInWindow);
 
@@ -548,7 +550,8 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
   const shiftEndDate = overnight ? addDays(attendanceDate, 1) : attendanceDate;
   const shiftEnd = toUtcFromIstDateTime(shiftEndDate, shift.end_time);
   const windowEnd = attendanceWindowEnd(shiftEnd, overnight, shift.checkout_after_minutes);
-  const punchesInWindow = sortPunches(rawPunches.filter((entry) => entry.punch_time >= shiftStart && entry.punch_time <= windowEnd));
+  const windowStart = new Date(shiftStart.getTime() - shift.checkin_before_minutes * 60_000);
+  const punchesInWindow = sortPunches(rawPunches.filter((entry) => entry.punch_time >= windowStart && entry.punch_time <= windowEnd));
 
   await syncOutOfShiftExceptions(firstPunch.employee_id, Number(firstPunch.biometric_id), attendanceDate, shift, localPunches, punchesInWindow);
 
@@ -593,12 +596,18 @@ export async function rebuildAttendanceForAllActiveEmployees(date: string): Prom
     }
     const existing = await pool.query("SELECT raw_punch_count FROM daily_attendance_records WHERE attendance_key = $1", [attendanceKeyForEmployee(employee.id, attendanceDate)]);
     if (Number(existing.rows[0]?.raw_punch_count ?? 0) > 0) continue;
-    const now = attendanceNow(); const isToday = attendanceDate === toIstDateKey(now);
+    const now = attendanceNow();
     const overnight = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight);
+    const shiftStart = toUtcFromIstDateTime(attendanceDate, shift.start_time);
     const shiftEnd = toUtcFromIstDateTime(overnight ? addDays(attendanceDate, 1) : attendanceDate, shift.end_time);
-    if (isToday && now < new Date(shiftEnd.getTime() + MISSING_PUNCH_BUFFER_MINUTES * 60_000)) continue;
-    const status: AttendanceStatus = holiday.rows[0] ? "HOLIDAY" : shift.weekly_off_days.includes(weekday) ? "WEEKLY_OFF" : "ABSENT";
-    await upsertAttendanceRecord({ attendance_key: attendanceKeyForEmployee(employee.id, attendanceDate), attendance_date: attendanceDate, employee_id: employee.id, biometric_id: Number(employee.biometric_id), shift_id: shift.shift_id, punch_in_at: null, punch_out_at: null, working_minutes: 0, raw_punch_count: 0, status, first_raw_punch_id: null, last_raw_punch_id: null, unmatched_raw_punch_id: null, holiday_id: status === "HOLIDAY" ? holiday.rows[0]!.id : null, note: status === "HOLIDAY" ? holiday.rows[0]!.name : status === "WEEKLY_OFF" ? "Weekly off" : "Absent" });
+    const deadline = new Date(shiftEnd.getTime() + MISSING_PUNCH_BUFFER_MINUTES * 60_000);
+    let status: AttendanceStatus; let note: string;
+    if (holiday.rows[0]) { status="HOLIDAY"; note=holiday.rows[0]!.name; }
+    else if (shift.weekly_off_days.includes(weekday)) { status="WEEKLY_OFF"; note="Weekly off"; }
+    else if (now < shiftStart) { status="PENDING"; note="Shift not started"; }
+    else if (now < deadline) { status="CHECK_IN_MISSING"; note=now < new Date(shiftStart.getTime()+shift.grace_minutes*60_000) ? "Awaiting check-in" : "Check-in fingerprint missing"; }
+    else { status="ABSENT"; note="No biometric attendance recorded"; }
+    await upsertAttendanceRecord({ attendance_key: attendanceKeyForEmployee(employee.id, attendanceDate), attendance_date: attendanceDate, employee_id: employee.id, biometric_id: Number(employee.biometric_id), shift_id: shift.shift_id, punch_in_at: null, punch_out_at: null, working_minutes: 0, raw_punch_count: 0, status, first_raw_punch_id: null, last_raw_punch_id: null, unmatched_raw_punch_id: null, holiday_id: status === "HOLIDAY" ? holiday.rows[0]!.id : null, note });
   }
   return { processed: employees.rowCount ?? 0 };
 }
@@ -633,6 +642,7 @@ export async function listAttendance(filters: AttendanceFilters): Promise<Attend
       a.biometric_id,
       a.employee_id,
       e.name AS employee_name,
+      COALESCE(e.employee_code, '—') AS employee_code,
       a.shift_id,
       s.name AS shift_name,
       a.punch_in_at,

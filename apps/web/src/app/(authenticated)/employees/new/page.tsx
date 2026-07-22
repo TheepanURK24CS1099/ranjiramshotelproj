@@ -12,6 +12,7 @@ export default function NewEmployeePage() {
   const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
+    employee_code: "",
     biometric_id: "",
     name: "",
     phone: "",
@@ -46,6 +47,7 @@ export default function NewEmployeePage() {
     setLoading(true);
 
     const payload: Record<string, unknown> = {
+      employee_code: formData.employee_code || undefined,
       biometric_id: parseInt(formData.biometric_id, 10),
       name: formData.name,
       phone: formData.phone || undefined,
@@ -116,6 +118,10 @@ export default function NewEmployeePage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Employee ID</label>
+            <input type="text" name="employee_code" value={formData.employee_code} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Biometric ID *</label>
             <input type="number" name="biometric_id" required value={formData.biometric_id} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" />

@@ -14,6 +14,7 @@ type AttendanceRow = {
   biometric_id: number;
   employee_id: string | null;
   employee_name: string | null;
+  employee_code: string;
   shift_id: string | null;
   shift_name: string | null;
   punch_in_at: string | null;
@@ -230,6 +231,7 @@ export default function AttendancePage() {
                 <th className="p-3 font-medium text-gray-500">Date</th>
                 <th className="p-3 font-medium text-gray-500">Biometric ID</th>
                 <th className="p-3 font-medium text-gray-500">Employee</th>
+                <th className="p-3 font-medium text-gray-500">Employee ID</th>
                 <th className="p-3 font-medium text-gray-500">Shift</th>
                 <th className="p-3 font-medium text-gray-500">Punch In</th>
                 <th className="p-3 font-medium text-gray-500">Punch Out</th>
@@ -248,6 +250,7 @@ export default function AttendancePage() {
                   <td className="p-3">{formatAttendanceDate(row.attendance_date)}</td>
                   <td className="p-3 font-medium">{row.biometric_id}</td>
                   <td className="p-3">{row.employee_name ?? "Unmatched"}</td>
+                  <td className="p-3">{row.employee_code}</td>
                   <td className="p-3">{row.shift_name ?? "—"}</td>
                   <td className="p-3">{formatTimeOnly(row.punch_in_at)}</td>
                   <td className="p-3">{formatTimeOnly(row.punch_out_at)}</td>
