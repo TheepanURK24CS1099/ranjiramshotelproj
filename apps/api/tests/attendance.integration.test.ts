@@ -290,6 +290,8 @@ describe("Part 13 attendance engine", () => {
   it("shows attendance summary cards on the dashboard", async () => {
     // Dashboard summary always uses the current IST date.
     const dashboardDate = currentIstDate();
+    // Keep the single-punch expectation independent of the wall clock.
+    process.env.ATTENDANCE_TEST_NOW = `${dashboardDate}T10:00:00+05:30`;
     const dashboardBiometricIds = biometricIds.slice(7, 12);
     const dashboardSourceEventKeys: string[] = [];
     const initialDashboard = await request(app).get("/dashboard/summary").set("Cookie", managerCookie).expect(200);
@@ -318,6 +320,7 @@ describe("Part 13 attendance engine", () => {
       expect(response.body.missingPunchOut).toBe(initialDashboard.body.missingPunchOut);
       expect(response.body.unmatchedPunches).toBe(initialDashboard.body.unmatchedPunches + 2);
     } finally {
+      delete process.env.ATTENDANCE_TEST_NOW;
       await pool.query("DELETE FROM daily_attendance_records WHERE biometric_id = ANY($1::bigint[])", [dashboardBiometricIds]);
       await pool.query("DELETE FROM raw_attendance_punches WHERE source_event_key = ANY($1::text[])", [dashboardSourceEventKeys]);
       await pool.query(

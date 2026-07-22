@@ -3,6 +3,7 @@ const pool = getDatabasePool();
 
 export interface Employee {
   id: string;
+  employee_code: string | null;
   biometric_id: number;
   name: string;
   phone: string | null;
@@ -102,10 +103,11 @@ export async function createEmployee(
     await client.query("BEGIN");
 
     const empResult = await client.query(
-      `INSERT INTO employees (biometric_id, name, phone, department, designation, joining_date, weekly_off_day, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO employees (employee_code, biometric_id, name, phone, department, designation, joining_date, weekly_off_day, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
+        employee.employee_code,
         employee.biometric_id,
         employee.name,
         employee.phone,

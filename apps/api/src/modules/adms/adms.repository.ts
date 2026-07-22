@@ -9,7 +9,7 @@ export interface StoredPunch {
   inserted: boolean;
 }
 
-export async function insertPunch(deviceId: string, punch: ParsedPunch, key: string): Promise<StoredPunch> {
+export async function insertPunch(deviceId: string, deviceCode: string, punch: ParsedPunch, key: string): Promise<StoredPunch> {
   const inserted = await pool.query<Omit<StoredPunch, "inserted">>(
     `INSERT INTO raw_attendance_punches (
       device_id,
@@ -17,9 +17,13 @@ export async function insertPunch(deviceId: string, punch: ParsedPunch, key: str
       punch_time,
       punch_state,
       verify_mode,
+      work_code,
+      device_code,
+      source,
+      device_timestamp,
       raw_payload,
       source_event_key
-    ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ADMS', $8, $9::jsonb, $10)
     ON CONFLICT (source_event_key) DO NOTHING
     RETURNING biometric_id, punch_time`,
     [
@@ -28,6 +32,9 @@ export async function insertPunch(deviceId: string, punch: ParsedPunch, key: str
       punch.punchTime,
       punch.punchState,
       punch.verifyMode,
+      punch.workCode,
+      deviceCode,
+      punch.deviceTimestamp,
       JSON.stringify({ payload: punch.rawPayload, record: punch.rawRecord }),
       key,
     ],

@@ -60,6 +60,7 @@ export default function EditEmployeePage() {
     setLoading(true);
 
     const payload = {
+      employee_code: employee.employee_code || null,
       biometric_id: parseInt(String(employee.biometric_id), 10),
       name: employee.name,
       phone: employee.phone || null,
@@ -161,6 +162,10 @@ export default function EditEmployeePage() {
 
         <form onSubmit={handleUpdate} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Employee ID</label>
+              <input type="text" name="employee_code" value={employee.employee_code ? String(employee.employee_code) : ""} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Biometric ID *</label>
               <input type="number" name="biometric_id" required value={String(employee.biometric_id)} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded" />

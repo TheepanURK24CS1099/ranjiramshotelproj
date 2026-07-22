@@ -74,7 +74,7 @@ export default function EmployeesListPage() {
           <tbody>
             {employees.map((emp) => (
               <tr key={String(emp.id)} className="border-b hover:bg-gray-50">
-                <td className="p-4">{String(emp.biometric_id)}</td>
+                <td className="p-4">{String(emp.employee_code || "—")} / {String(emp.biometric_id)}</td>
                 <td className="p-4 font-medium">{String(emp.name)}</td>
                 <td className="p-4">{String(emp.department || "-")}</td>
                 <td className="p-4">

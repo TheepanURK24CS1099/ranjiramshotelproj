@@ -6,6 +6,7 @@ export interface Device {
   id: string; device_code: string; name: string | null; model: string | null;
   serial_number: string | null; firmware_version: string | null; active: boolean;
   last_seen: Date | null; last_ip: string | null; status: "ONLINE" | "OFFLINE";
+  last_sync?: Date | null; last_raw_punch_time?: Date | null;
   created_at: Date; updated_at: Date; last_raw_punch_received?: Date | null;
 }
 
@@ -44,8 +45,11 @@ export async function update(id: string, data: { device_code?: string | undefine
 export async function setActive(id: string, active: boolean): Promise<Device | null> {
   return (await pool.query("UPDATE devices SET active=$2,status='OFFLINE' WHERE id=$1 RETURNING *", [id, active])).rows[0] ?? null;
 }
-export async function markSeen(id: string, ip: string | null): Promise<void> {
-  await pool.query("UPDATE devices SET last_seen=now(),last_ip=$2,status='ONLINE' WHERE id=$1 AND active=true", [id, ip]);
+export async function markSeen(id: string, ip: string | null, synced = false): Promise<void> {
+  await pool.query("UPDATE devices SET last_seen=now(),last_ip=$2,status='ONLINE',last_sync=CASE WHEN $3 THEN now() ELSE last_sync END WHERE id=$1 AND active=true", [id, ip, synced]);
+}
+export async function markRawPunchReceived(id: string, punchTime: Date): Promise<void> {
+  await pool.query("UPDATE devices SET last_raw_punch_time=GREATEST(COALESCE(last_raw_punch_time, $2), $2) WHERE id=$1", [id, punchTime]);
 }
 export async function markStaleOffline(thresholdMs: number): Promise<number> {
   const result = await pool.query("UPDATE devices SET status='OFFLINE' WHERE status <> 'OFFLINE' AND (active=false OR last_seen IS NULL OR last_seen < now() - ($1 * interval '1 millisecond'))", [thresholdMs]);
