@@ -72,7 +72,7 @@ grep -qx 'NEXT_PUBLIC_API_URL=https://hotel.srcheckin.com/api' "$web_environment
 
 [[ -d "$repository_root/apps/api/dist" ]] || fail "API build folder is missing"
 [[ -d "$repository_root/apps/web/.next" ]] || fail "web build folder is missing"
-if rg -n -i '(hostel|mansion)' "$repository_root/infrastructure/pm2" "$repository_root/infrastructure/nginx" "$repository_root/infrastructure/backup" "$repository_root/infrastructure/scripts"; then
+if rg -n -i --glob '!validate-hotel-production.sh' '(hostel|mansion)' "$repository_root/infrastructure/pm2" "$repository_root/infrastructure/nginx" "$repository_root/infrastructure/backup" "$repository_root/infrastructure/scripts"; then
   fail "deployment infrastructure contains Hostel or Mansion references"
 fi
 
