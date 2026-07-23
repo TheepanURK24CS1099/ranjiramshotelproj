@@ -27,5 +27,6 @@ router.use("/payroll", payrollRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/reports", reportsRoutes);
 router.get("/ready", getReady);
+router.get("/readiness", getReady);
 
 export default router;

@@ -150,7 +150,14 @@ export function parseEnvironment(input: Record<string, unknown>) {
   return environmentSchema.parse(input);
 }
 
-const result = environmentSchema.safeParse(process.env);
+// PORT and CORS_ORIGIN are the deployment-facing names.  Keep the older
+// API_PORT and WEB_ORIGIN names working for local development and existing
+// installations.
+const result = environmentSchema.safeParse({
+  ...process.env,
+  API_PORT: process.env.API_PORT ?? process.env.PORT,
+  WEB_ORIGIN: process.env.WEB_ORIGIN ?? process.env.CORS_ORIGIN,
+});
 
 if (!result.success) {
   const issues = result.error.issues

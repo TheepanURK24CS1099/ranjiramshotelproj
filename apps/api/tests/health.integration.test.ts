@@ -62,6 +62,14 @@ describe("health endpoint", () => {
     expect(response.body.data.status).toBe("ready");
   });
 
+  it("returns 200 from /readiness when the database check succeeds", async () => {
+    mockCheckDatabaseConnection.mockResolvedValue(undefined);
+
+    const response = await request(app).get("/readiness").expect(200);
+
+    expect(response.body.data.status).toBe("ready");
+  });
+
   it("returns a ready payload with status, service and a valid timestamp", async () => {
     mockCheckDatabaseConnection.mockResolvedValue(undefined);
 
