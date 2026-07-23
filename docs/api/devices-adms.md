@@ -6,8 +6,8 @@ Creation and editing accept `device_code`, `name`, `model`, `serial_number`, `fi
 
 Device-facing routes are unauthenticated by browser session because the machine identifies itself by configured code or serial through `SN`, `sn`, `device_code`, or `X-Device-Code`. They return only plain text:
 
-- `GET|POST /iclock/getrequest` records a heartbeat and returns `OK`.
-- `GET|POST /iclock/cdata` records a heartbeat, ingests valid `ATTLOG` rows, and returns `OK: n`.
-- `POST /iclock/devicecmd` records a heartbeat and returns `OK`.
+- `GET|POST /iclock/getrequest` and `/iclock/getrequest.aspx` record a heartbeat and return `OK`.
+- `GET|POST /iclock/cdata` and `/iclock/cdata.aspx` record a heartbeat, ingest valid `ATTLOG` rows, and return `OK: n`.
+- `POST /iclock/devicecmd` and `/iclock/devicecmd.aspx` record a heartbeat and return `OK`.
 
 See [the architecture note](../architecture/biometric-devices-adms.md) for parsing, identity, status, deduplication, and device simulation details.

@@ -4,9 +4,9 @@ import { env } from "../../config/environment.js";
 import * as controller from "./adms.controller.js";
 const router=Router();
 router.use(express.text({type:()=>true,limit:env.ADMS_BODY_LIMIT}));
-router.all("/cdata",controller.cdata);
-router.all("/getrequest",controller.getrequest);
-router.post("/devicecmd",controller.devicecmd);
+router.all(["/cdata","/cdata.aspx"],controller.cdata);
+router.all(["/getrequest","/getrequest.aspx"],controller.getrequest);
+router.post(["/devicecmd","/devicecmd.aspx"],controller.devicecmd);
 // Parser failures (including an oversized device payload) must remain ADMS text,
 // never the application's JSON/HTML error format.
 router.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
