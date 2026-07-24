@@ -10,7 +10,6 @@ const reports = [
   ["salary-history", "Salary History"],
   ["advances", "Advances"],
   ["device-logs", "Devices"],
-  ["raw-punches", "Raw Punches"],
   ["attendance-exceptions", "Exceptions"],
 ] as const;
 
@@ -48,15 +47,6 @@ const fields: Record<Report, Field[]> = {
     { key: "deviceId", label: "Device ID" },
     { key: "fromDate", label: "From date", type: "date" },
     { key: "toDate", label: "To date", type: "date" },
-  ],
-  "raw-punches": [
-    { key: "deviceId", label: "Device ID" },
-    { key: "employeeId", label: "Employee ID" },
-    { key: "biometricId", label: "Biometric ID" },
-    { key: "fromDate", label: "From date", type: "date" },
-    { key: "toDate", label: "To date", type: "date" },
-    { key: "ignored", label: "Ignored", options: ["true", "false"] },
-    { key: "processed", label: "Processed", options: ["true", "false"] },
   ],
   "attendance-exceptions": [
     ...common,

@@ -70,7 +70,7 @@ describe("Part 3: Simple Unmatched Biometric Summary", () => {
     await pool.query("DELETE FROM app_users WHERE username LIKE $1", [`${marker}%`]);
   });
 
-  it("attendance summary main table only shows registered employees", async () => {
+  it("attendance summary main table only shows registered employees and pagination reflects registered employees", async () => {
     const res = await request(app)
       .get("/reports/attendance-summary?fromDate=2995-04-01&toDate=2995-04-02")
       .set("Cookie", adminCookie)
@@ -82,6 +82,8 @@ describe("Part 3: Simple Unmatched Biometric Summary", () => {
     // Ensure unmatched biometric IDs do not appear as rows in main table
     expect(items.some((i) => String(i.biometric_id) === String(bioUnmatched1))).toBe(false);
     expect(items.some((i) => String(i.biometric_id) === String(bioUnmatched2))).toBe(false);
+    // Unmatched rows do not affect pagination total
+    expect(res.body.pagination.total).toBe(1);
   });
 
   it("unmatched IDs are excluded from totalEmployees and shown as historicalUnmatchedIds count", async () => {
@@ -93,6 +95,22 @@ describe("Part 3: Simple Unmatched Biometric Summary", () => {
     const summary = res.body.summary as Record<string, unknown>;
     expect(summary.totalEmployees).toBe(1);
     expect(summary.historicalUnmatchedIds).toBeGreaterThanOrEqual(2);
+  });
+
+  it("unmatched rows do not appear in normal attendance CSV/PDF exports", async () => {
+    const csvRes = await request(app)
+      .get("/reports/attendance-summary/export.csv?fromDate=2995-04-01&toDate=2995-04-02")
+      .set("Cookie", adminCookie)
+      .expect(200);
+    expect(csvRes.text).toContain(`${marker}-emp`);
+    expect(csvRes.text).not.toContain(String(bioUnmatched1));
+    expect(csvRes.text).not.toContain(String(bioUnmatched2));
+
+    const pdfRes = await request(app)
+      .get("/reports/attendance-summary/export.pdf?fromDate=2995-04-01&toDate=2995-04-02")
+      .set("Cookie", adminCookie)
+      .expect(200);
+    expect(pdfRes.body.subarray(0, 4).toString()).toBe("%PDF");
   });
 
   it("non-admin users (MANAGER) cannot access unmatched biometrics endpoint", async () => {
@@ -123,7 +141,21 @@ describe("Part 3: Simple Unmatched Biometric Summary", () => {
     expect(firstRow).not.toHaveProperty("ignored");
   });
 
-  it("existing attendance reports still work correctly", async () => {
+  it("existing employee View Report endpoint still works for registered employees", async () => {
+    const res = await request(app)
+      .get(`/reports/employees/${employeeId}/attendance?fromDate=2995-04-01&toDate=2995-04-02`)
+      .set("Cookie", managerCookie)
+      .expect(200);
+
+    expect(res.body.employee).toMatchObject({
+      id: employeeId,
+      name: `${marker}-emp`,
+      employee_code: `${marker}-code`,
+    });
+    expect(res.body.items).toHaveLength(1);
+  });
+
+  it("existing attendance reports still work correctly for MANAGER role", async () => {
     await request(app)
       .get("/reports/attendance-summary")
       .set("Cookie", managerCookie)

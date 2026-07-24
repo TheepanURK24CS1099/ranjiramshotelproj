@@ -27,15 +27,15 @@ export async function attendance(q: Query) {
     v.push(q.active === "true");
     c.push(`e.active = $${v.length}`);
   }
-  c.push(`(a.employee_id IS NOT NULL OR a.status = 'UNMATCHED')`);
+  c.push(`a.employee_id IS NOT NULL`);
 
   const where = c.length ? `WHERE ${c.join(" AND ")}` : "";
   const {limit,offset}=paging(q); v.push(limit,offset);
 
   const sql = `
     SELECT
-      COALESCE(e.name, 'Unmatched') AS employee,
-      COALESCE(e.name, 'Unmatched') AS employee_name,
+      e.name AS employee,
+      e.name AS employee_name,
       e.id AS employee_id,
       COALESCE(e.employee_code,'—') AS employee_code,
       a.biometric_id::text AS biometric_id,
@@ -55,13 +55,13 @@ export async function attendance(q: Query) {
     LEFT JOIN employees e ON e.id=a.employee_id
     LEFT JOIN shifts s ON s.id=a.shift_id
     ${where}
-    GROUP BY e.id, e.name, e.employee_code, e.active, a.biometric_id, s.name
+    GROUP BY e.id, e.name, e.employee_code, e.active, e.biometric_id, a.biometric_id, s.name
     ORDER BY e.name NULLS LAST, a.biometric_id
     LIMIT $${v.length-1} OFFSET $${v.length}
   `;
 
   const countQuery = `
-    SELECT COUNT(DISTINCT COALESCE(a.employee_id::text, a.biometric_id::text)) AS total
+    SELECT COUNT(DISTINCT a.employee_id)::int AS total
     FROM daily_attendance_records a
     LEFT JOIN employees e ON e.id = a.employee_id
     ${where}
