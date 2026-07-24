@@ -27,38 +27,43 @@ export async function attendance(q: Query) {
     v.push(q.active === "true");
     c.push(`e.active = $${v.length}`);
   }
+  c.push(`(a.employee_id IS NOT NULL OR a.status = 'UNMATCHED')`);
 
   const where = c.length ? `WHERE ${c.join(" AND ")}` : "";
   const {limit,offset}=paging(q); v.push(limit,offset);
 
   const sql = `
     SELECT
+      COALESCE(e.name, 'Unmatched') AS employee,
+      COALESCE(e.name, 'Unmatched') AS employee_name,
       e.id AS employee_id,
-      e.name AS employee_name,
       COALESCE(e.employee_code,'—') AS employee_code,
       a.biometric_id::text AS biometric_id,
-      COALESCE(s.name,'Unassigned') AS shift,
-      CASE WHEN e.active THEN 'Active' ELSE 'Inactive' END AS active_status,
+      COALESCE(s.name, 'Historical/Unassigned') AS shift,
+      CASE WHEN e.active THEN 'Active' WHEN e.active IS FALSE THEN 'Inactive' ELSE '—' END AS active_status,
+      COUNT(*)::int AS total_working_days,
       COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY'))::int AS present_days,
       COUNT(*) FILTER (WHERE a.status='ABSENT')::int AS absent_days,
       COUNT(*) FILTER (WHERE a.status IN ('LATE','LATE_AND_EARLY_EXIT'))::int AS late_days,
       COUNT(*) FILTER (WHERE a.status='MISSING_PUNCH')::int AS missing_punches,
+      COALESCE(SUM(a.working_minutes), 0)::int AS total_worked_minutes,
       ROUND(COALESCE(SUM(a.working_minutes),0)/60.0, 1)::text AS total_worked_hours,
-      0::text AS overtime_hours,
+      0::int AS overtime_minutes,
+      '0.0'::text AS overtime_hours,
       'View Report' AS view_report
     FROM daily_attendance_records a
-    JOIN employees e ON e.id=a.employee_id
+    LEFT JOIN employees e ON e.id=a.employee_id
     LEFT JOIN shifts s ON s.id=a.shift_id
     ${where}
     GROUP BY e.id, e.name, e.employee_code, e.active, a.biometric_id, s.name
-    ORDER BY e.name NULLS LAST
+    ORDER BY e.name NULLS LAST, a.biometric_id
     LIMIT $${v.length-1} OFFSET $${v.length}
   `;
 
   const countQuery = `
-    SELECT COUNT(DISTINCT a.employee_id) AS total
+    SELECT COUNT(DISTINCT COALESCE(a.employee_id::text, a.biometric_id::text)) AS total
     FROM daily_attendance_records a
-    JOIN employees e ON e.id = a.employee_id
+    LEFT JOIN employees e ON e.id = a.employee_id
     ${where}
   `;
 
@@ -71,7 +76,7 @@ export async function attendance(q: Query) {
       COUNT(*) FILTER (WHERE a.status IN ('LATE', 'LATE_AND_EARLY_EXIT'))::int AS late,
       COUNT(*) FILTER (WHERE a.status = 'MISSING_PUNCH')::int AS missing_punches
     FROM daily_attendance_records a
-    JOIN employees e ON e.id = a.employee_id
+    LEFT JOIN employees e ON e.id = a.employee_id
     ${where}
   `;
 
