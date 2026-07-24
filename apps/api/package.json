@@ -17,7 +17,9 @@
     "db:migrate:status": "tsx src/scripts/migrate.ts status",
     "db:migrate:down": "tsx src/scripts/migrate.ts down",
     "db:cleanup-part18": "tsx src/scripts/cleanup-part18.ts",
-    "auth:create-admin": "tsx src/scripts/auth-create-admin.ts"
+    "auth:create-admin": "tsx src/scripts/auth-create-admin.ts",
+    "maintenance:cleanup-historical-punches": "tsx src/scripts/cleanup-historical-punches.ts",
+    "maintenance:cleanup-duplicate-punches": "tsx src/scripts/cleanup-duplicate-punches.ts"
   },
   "dependencies": {
     "argon2": "0.45.0",
