@@ -4,11 +4,11 @@ import PDFDocument from "pdfkit";
 import * as reports from "./reports.service.js";
 import type { ReportName } from "./reports.service.js";
 
-const names = new Set<ReportName>(["attendance-summary", "payroll-summary", "salary-history", "advances", "device-logs", "raw-punches", "attendance-exceptions"]);
+const names = new Set<ReportName>(["attendance-summary", "payroll-summary", "salary-history", "advances", "device-logs", "raw-punches", "attendance-exceptions", "unmatched-biometrics"]);
 const financial = /(?:salary|pay|deduction|recovery|amount|balance|additions|gross|net)/iu;
 function name(req: Request): ReportName { const value=req.params.report as ReportName; if(!names.has(value)) throw new Error("Not Found: report"); return value; }
 function error(res:Response,e:unknown) { const text=e instanceof Error?e.message:"Report failed"; res.status(text.startsWith("Not Found")?404:400).json({message:text.replace(/^Validation: /u,"")}); }
-function csv(rows:Record<string,unknown>[]) { const keys=Object.keys(rows[0]??{}); const cell=(v:unknown)=>`"${String(v??"").replaceAll('"','""')}"`; return `\uFEFF${keys.join(',')}\r\n${rows.map(row=>keys.map(k=>cell(row[k])).join(',')).join('\r\n')}\r\n`; }
+function csv(rows:Record<string,unknown>[]) { const keys=Object.keys(rows[0]??{}).filter(key=>key!=="employee_id"); const cell=(v:unknown)=>`"${String(v??"").replaceAll('"','""')}"`; return `\uFEFF${keys.join(',')}\r\n${rows.map(row=>keys.map(k=>cell(row[k])).join(',')).join('\r\n')}\r\n`; }
 function label(key:string) { return key === "employee_code" ? "Employee ID" : key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function minutes(raw:unknown){const value=Number(raw);if(!Number.isFinite(value))return "0m";const hours=Math.floor(value/60),rest=Math.abs(value%60);return hours?`${hours}h ${String(rest).padStart(2,"0")}m`:`${rest}m`;}
 function value(key:string, raw:unknown) { if (raw === null || raw === undefined) return "—"; if (typeof raw === "boolean") return raw ? "Active" : "Inactive"; if (/(?:minutes|overtime)/iu.test(key) && /^-?\d+(\.\d+)?$/u.test(String(raw))) return minutes(raw); if (financial.test(key) && /^-?\d+(\.\d+)?$/u.test(String(raw))) return `₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(raw))}`; return String(raw).replaceAll("_", " "); }
@@ -21,3 +21,6 @@ function pdf(title:string, rows:Record<string,unknown>[], query:Request["query"]
 }
 export async function get(req:Request,res:Response){try{res.json(await reports.report(name(req),req.query));}catch(e){error(res,e)}}
 export async function exportReport(req:Request,res:Response){try{const report=await reports.report(name(req),{...req.query,page:1,limit:100});const title=name(req).replaceAll('-',' ');if(req.params.format==='csv')res.type('text/csv; charset=utf-8').attachment(`${name(req)}.csv`).send(csv(report.items as Record<string,unknown>[]));else res.type('application/pdf').set('Content-Disposition',`inline; filename=${name(req)}.pdf`).send(await pdf(title,report.items as Record<string,unknown>[],req.query));}catch(e){error(res,e)}}
+
+export async function getEmployeeAttendance(req:Request,res:Response){try{res.json(await reports.employeeAttendanceDetail(String(req.params.employeeId??''),req.query));}catch(e){error(res,e)}}
+export async function exportEmployeeAttendance(req:Request,res:Response){try{const empId=String(req.params.employeeId??'');const data=await reports.employeeAttendanceDetail(empId,{...req.query,page:1,limit:366});const emp=data.employee as Record<string,unknown>;const title=`Attendance Report – ${String(emp.name??'')}`;if(req.params.format==='csv')res.type('text/csv; charset=utf-8').attachment(`attendance-${empId}.csv`).send(csv(data.items as Record<string,unknown>[]));else res.type('application/pdf').set('Content-Disposition',`inline; filename=attendance-${empId}.pdf`).send(await pdf(title,data.items as Record<string,unknown>[],req.query));}catch(e){error(res,e)}}
