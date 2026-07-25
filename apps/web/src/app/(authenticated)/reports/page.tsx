@@ -1,4 +1,5 @@
 "use client";
+
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useState } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
@@ -100,80 +101,80 @@ function UnmatchedDetail({ count }: { count: number }) {
 
   if (!isAdmin) {
     return (
-      <div id="card-historical-unmatched" className="rounded-lg bg-white p-5 shadow-sm border border-gray-200">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Historical Unmatched IDs</div>
-        <div className="text-2xl font-bold text-gray-900 mt-1">{count}</div>
+      <div id="card-historical-unmatched" className="rounded-2xl bg-white p-5 shadow-xs border border-slate-200/90">
+        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Historical Unmatched IDs</div>
+        <div className="text-2xl font-extrabold text-slate-900 mt-1">{count}</div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg bg-white shadow-sm border border-gray-200 col-span-1 sm:col-span-2 lg:col-span-1">
+    <div className="rounded-2xl bg-white shadow-xs border border-slate-200/90 col-span-1 sm:col-span-2 lg:col-span-1 overflow-hidden">
       <button
         id="btn-toggle-unmatched"
         onClick={toggle}
-        className="w-full text-left p-5 flex justify-between items-center hover:bg-gray-50/80 transition-colors rounded-lg focus:outline-none"
+        className="w-full text-left p-5 flex justify-between items-center hover:bg-slate-50/80 transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-teal-600"
       >
         <div>
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
             Historical / Unmatched Biometric IDs
           </div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">{count}</div>
+          <div className="text-2xl font-extrabold text-slate-900 mt-1">{count}</div>
         </div>
-        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
+        <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
           {open ? "▲ Hide" : "▼ Details"}
         </span>
       </button>
 
       {open && (
-        <div id="unmatched-detail-panel" className="border-t border-gray-200 px-5 py-4 bg-gray-50/30">
-          {loading && <div className="py-4 text-center text-gray-500 text-sm">Loading unmatched biometric records…</div>}
-          {error && <div className="py-3 text-red-600 text-sm bg-red-50 p-3 rounded border border-red-200">{error}</div>}
+        <div id="unmatched-detail-panel" className="border-t border-slate-200/80 px-5 py-4 bg-slate-50/50">
+          {loading && <div className="py-4 text-center text-slate-500 text-xs font-medium">Loading unmatched biometric records…</div>}
+          {error && <div className="py-3 text-rose-700 text-xs bg-rose-50 p-3 rounded-xl border border-rose-200">{error}</div>}
           {!loading && !error && rows.length === 0 && (
-            <div className="py-4 text-center text-gray-500 text-sm">No unmatched biometric records found.</div>
+            <div className="py-4 text-center text-slate-500 text-xs font-medium">No unmatched biometric records found.</div>
           )}
           {!loading && rows.length > 0 && (
             <>
-              <div className="overflow-x-auto rounded border border-gray-200 bg-white">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200 text-xs text-gray-600 font-semibold uppercase">
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                <table className="min-w-full text-xs text-left">
+                  <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-500 uppercase tracking-wider">
                     <tr>
-                      <th className="px-3 py-2.5 text-left whitespace-nowrap">Biometric ID</th>
-                      <th className="px-3 py-2.5 text-left whitespace-nowrap">Device</th>
-                      <th className="px-3 py-2.5 text-left whitespace-nowrap">First Seen</th>
-                      <th className="px-3 py-2.5 text-left whitespace-nowrap">Last Seen</th>
-                      <th className="px-3 py-2.5 text-right whitespace-nowrap">Total Records</th>
+                      <th className="px-3.5 py-2.5 whitespace-nowrap">Biometric ID</th>
+                      <th className="px-3.5 py-2.5 whitespace-nowrap">Device</th>
+                      <th className="px-3.5 py-2.5 whitespace-nowrap">First Seen</th>
+                      <th className="px-3.5 py-2.5 whitespace-nowrap">Last Seen</th>
+                      <th className="px-3.5 py-2.5 text-right whitespace-nowrap">Total Records</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-slate-100">
                     {rows.map((r, i) => (
-                      <tr key={i} className="hover:bg-gray-50/80">
-                        <td className="px-3 py-2 font-mono font-medium text-gray-900">{r.biometric_id}</td>
-                        <td className="px-3 py-2 text-gray-700">{r.device_name}</td>
-                        <td className="px-3 py-2 text-gray-600 text-xs">{r.first_seen}</td>
-                        <td className="px-3 py-2 text-gray-600 text-xs">{r.last_seen}</td>
-                        <td className="px-3 py-2 text-right font-medium text-gray-900">{r.total_records}</td>
+                      <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-3.5 py-2.5 font-mono font-bold text-slate-900">{r.biometric_id}</td>
+                        <td className="px-3.5 py-2.5 text-slate-700">{r.device_name}</td>
+                        <td className="px-3.5 py-2.5 text-slate-500">{r.first_seen}</td>
+                        <td className="px-3.5 py-2.5 text-slate-500">{r.last_seen}</td>
+                        <td className="px-3.5 py-2.5 text-right font-bold text-slate-900">{r.total_records}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               {pages > 1 && (
-                <div className="flex items-center justify-between gap-3 mt-3 pt-2">
+                <div className="flex items-center justify-between gap-3 mt-3">
                   <button
                     disabled={page <= 1}
                     onClick={() => load(page - 1)}
-                    className="rounded border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    className="min-h-[32px] rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
                   >
                     Previous
                   </button>
-                  <span className="text-xs text-gray-600 font-medium">
+                  <span className="text-xs text-slate-600 font-medium">
                     Page {page} of {pages}
                   </span>
                   <button
                     disabled={page >= pages}
                     onClick={() => load(page + 1)}
-                    className="rounded border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    className="min-h-[32px] rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
                   >
                     Next
                   </button>
@@ -194,22 +195,23 @@ function renderCell(c: string, row: Record<string, unknown>) {
       <a
         id={`btn-view-report-${row.employee_id}`}
         href={`/reports/attendance/employees/${row.employee_id}`}
-        className="inline-flex items-center px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+        className="inline-flex min-h-[32px] items-center px-3 py-1 text-xs font-bold text-[#028174] bg-teal-50 border border-teal-200 rounded-lg hover:bg-[#028174] hover:text-white transition-colors focus-visible:outline-2 focus-visible:outline-teal-600"
       >
         View Report
       </a>
     );
   }
 
-  if (val === null || val === undefined) return <span className="text-gray-400">—</span>;
+  if (val === null || val === undefined) return <span className="text-slate-400">—</span>;
 
   if (typeof val === "boolean") {
     return (
       <span
-        className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
-          val ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : "bg-gray-100 text-gray-700 border border-gray-200"
+        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${
+          val ? "bg-emerald-50 text-emerald-800 border-emerald-300" : "bg-slate-100 text-slate-700 border-slate-200"
         }`}
       >
+        <span className={`h-1.5 w-1.5 rounded-full ${val ? "bg-emerald-500" : "bg-slate-400"}`} aria-hidden="true" />
         {val ? "Active" : "Inactive"}
       </span>
     );
@@ -217,25 +219,25 @@ function renderCell(c: string, row: Record<string, unknown>) {
 
   const strVal = String(val);
   if (c === "status" || c === "attendance_status" || c === "payroll_status") {
-    let badgeClass = "bg-gray-100 text-gray-800 border-gray-200";
+    let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
     if (strVal === "PRESENT" || strVal === "PAID" || strVal === "APPROVED") {
-      badgeClass = "bg-emerald-100 text-emerald-800 border-emerald-200";
+      badgeClass = "bg-emerald-50 text-emerald-800 border-emerald-300";
     } else if (strVal === "ABSENT" || strVal === "REJECTED" || strVal === "CANCELLED") {
-      badgeClass = "bg-red-100 text-red-800 border-red-200";
+      badgeClass = "bg-rose-50 text-rose-800 border-rose-300";
     } else if (strVal === "LATE" || strVal === "PENDING" || strVal === "GENERATED") {
-      badgeClass = "bg-amber-100 text-amber-800 border-amber-200";
+      badgeClass = "bg-amber-50 text-amber-800 border-amber-300";
     } else if (strVal === "MISSING_PUNCH" || strVal === "UNMATCHED" || strVal === "DRAFT") {
-      badgeClass = "bg-orange-100 text-orange-800 border-orange-200";
+      badgeClass = "bg-orange-50 text-orange-800 border-orange-300";
     }
     return (
-      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold border ${badgeClass}`}>
+      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold border ${badgeClass}`}>
         {strVal.replaceAll("_", " ")}
       </span>
     );
   }
 
   if (c === "biometric_id" || c === "employee_code") {
-    return <span className="font-mono text-gray-900">{strVal}</span>;
+    return <span className="font-mono font-semibold text-slate-900">{strVal}</span>;
   }
 
   return strVal;
@@ -302,23 +304,25 @@ export default function ReportsPage() {
   const summary: Record<string, unknown> = data?.summary ?? {};
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Reports &amp; Exports</h1>
-        <p className="text-sm text-gray-500">Operational and financial reports in India Standard Time.</p>
+    <div className="space-y-6 max-w-7xl mx-auto py-4">
+      {/* Top Header */}
+      <div className="border-b border-slate-200/80 pb-6">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Reports &amp; Exports</h1>
+        <p className="mt-1 text-sm text-slate-600">Operational and financial reports formatted in India Standard Time.</p>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-3">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200/80 pb-3" role="tablist" aria-label="Report Categories">
         {reports.map(([id, label]) => (
           <button
             key={id}
+            role="tab"
+            aria-selected={selected === id}
             onClick={() => switchReport(id)}
-            className={`rounded-md px-3.5 py-2 text-sm font-medium transition-colors ${
+            className={`min-h-[40px] rounded-xl px-4 py-2 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-teal-600 ${
               selected === id
-                ? "bg-[#028174] text-white shadow-sm"
-                : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-300"
+                ? "bg-[#028174] text-white shadow-xs"
+                : "bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/90"
             }`}
           >
             {label}
@@ -326,19 +330,25 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Filter Card */}
-      <div className="rounded-lg bg-white p-5 shadow-sm border border-gray-200 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Filter Options</h2>
+      {/* Filter Options Card */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <svg className="h-5 w-5 text-[#028174]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Filter Options</h2>
+        </div>
+
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
           {fields[selected].map((field) =>
             field.options ? (
-              <label key={field.key} className="text-xs font-medium text-gray-700">
+              <label key={field.key} className="text-xs font-semibold text-slate-700">
                 {field.label}
                 <select
                   aria-label={field.label}
                   value={filters[field.key] ?? ""}
                   onChange={(e) => setFilters({ ...filters, [field.key]: e.target.value })}
-                  className="block mt-1 w-full border border-gray-300 rounded-md p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#028174]"
+                  className="mt-1.5 w-full min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition-colors focus:border-teal-500 focus:bg-white focus-visible:outline-2 focus-visible:outline-teal-600"
                 >
                   <option value="">Any</option>
                   {field.options.map((option) => (
@@ -349,48 +359,55 @@ export default function ReportsPage() {
                 </select>
               </label>
             ) : (
-              <label key={field.key} className="text-xs font-medium text-gray-700">
+              <label key={field.key} className="text-xs font-semibold text-slate-700">
                 {field.label}
                 <input
                   aria-label={field.label}
                   type={field.type ?? "text"}
                   value={filters[field.key] ?? ""}
                   onChange={(e) => setFilters({ ...filters, [field.key]: e.target.value })}
-                  className="block mt-1 w-full border border-gray-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#028174]"
+                  className="mt-1.5 w-full min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition-colors focus:border-teal-500 focus:bg-white focus-visible:outline-2 focus-visible:outline-teal-600"
                 />
               </label>
             ),
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-100">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
           <div className="flex flex-wrap gap-2">
             <button
               onClick={apply}
-              className="rounded-md bg-[#028174] hover:bg-[#026c61] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#028174] hover:bg-[#026c61] px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-teal-600 focus-visible:outline-offset-2"
             >
               Apply Filters
             </button>
             <button
               onClick={reset}
               disabled={loading}
-              className="rounded-md border border-gray-300 bg-white hover:bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 transition-colors disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-slate-600"
             >
               Clear Filters
             </button>
           </div>
+
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => exportFile("csv")}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors"
+              onClick={() => void exportFile("csv")}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-slate-600"
             >
-              📥 CSV / Excel
+              <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              CSV / Excel
             </button>
             <button
-              onClick={() => exportFile("pdf")}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors"
+              onClick={() => void exportFile("pdf")}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-slate-600"
             >
-              🖨️ Printable PDF
+              <svg className="h-4 w-4 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Printable PDF
             </button>
           </div>
         </div>
@@ -398,14 +415,17 @@ export default function ReportsPage() {
 
       {/* Error State */}
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
-          {error}
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-medium text-rose-700 flex items-center gap-2" role="alert">
+          <svg className="h-5 w-5 shrink-0 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{error}</span>
         </div>
       )}
 
       {/* Loading State */}
       {loading ? (
-        <div className="rounded-lg bg-white p-12 text-center text-gray-500 shadow-sm border border-gray-200 text-sm">
+        <div className="rounded-2xl bg-white p-12 text-center text-slate-500 shadow-xs border border-slate-200/90 text-sm font-medium" role="status">
           Loading report data…
         </div>
       ) : (
@@ -416,39 +436,39 @@ export default function ReportsPage() {
               key === "historicalUnmatchedIds" ? (
                 <UnmatchedDetail key={key} count={Number(val)} />
               ) : (
-                <div key={key} className="rounded-lg bg-white p-5 shadow-sm border border-gray-200">
-                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <div key={key} className="rounded-2xl bg-white p-5 shadow-xs border border-slate-200/90">
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     {key.replace(/([A-Z])/g, " $1")}
                   </div>
-                  <div className="text-2xl font-bold text-gray-900 mt-1">{String(val)}</div>
+                  <div className="text-2xl font-extrabold text-slate-900 mt-1">{String(val)}</div>
                 </div>
               ),
             )}
           </div>
 
           {/* Main Table */}
-          <div className="overflow-x-auto rounded-lg bg-white shadow-sm border border-gray-200">
+          <div className="overflow-x-auto rounded-2xl bg-white shadow-xs border border-slate-200/90">
             {items.length === 0 ? (
-              <div className="p-12 text-center text-gray-500 text-sm">
-                <p className="font-medium text-gray-900">No matching report data.</p>
-                <p className="text-xs text-gray-400 mt-1">Try adjusting your date range or filter criteria.</p>
+              <div className="p-12 text-center text-slate-500 text-sm">
+                <p className="font-bold text-slate-900 text-base">No matching report data.</p>
+                <p className="text-xs text-slate-500 mt-1">Try adjusting your date range or filter criteria.</p>
               </div>
             ) : (
-              <table className="min-w-full text-sm divide-y divide-gray-200">
-                <thead className="bg-gray-50 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  <tr>
+              <table className="min-w-full text-sm text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200/80 bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     {columns.map((c) => (
-                      <th className="px-4 py-3 text-left whitespace-nowrap" key={c}>
+                      <th className="px-5 py-4 whitespace-nowrap" key={c}>
                         {c === "employee_code" ? "Employee ID" : c.replaceAll("_", " ")}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
+                <tbody className="divide-y divide-slate-100 bg-white">
                   {items.map((row, i) => (
-                    <tr className="hover:bg-gray-50/80 transition-colors" key={i}>
+                    <tr className="hover:bg-slate-50/70 transition-colors" key={i}>
                       {columns.map((c) => (
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-700" key={c}>
+                        <td className="px-5 py-4 whitespace-nowrap text-slate-700" key={c}>
                           {renderCell(c, row)}
                         </td>
                       ))}
@@ -462,23 +482,23 @@ export default function ReportsPage() {
           {/* Pagination */}
           {data?.pagination && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-              <span className="text-sm text-gray-600">
-                Page <span className="font-medium text-gray-900">{data.pagination.page}</span> of{" "}
-                <span className="font-medium text-gray-900">{data.pagination.pages}</span> ({data.pagination.total}{" "}
+              <span className="text-xs font-medium text-slate-600">
+                Page <span className="font-bold text-slate-900">{data.pagination.page}</span> of{" "}
+                <span className="font-bold text-slate-900">{data.pagination.pages}</span> ({data.pagination.total}{" "}
                 total records)
               </span>
               <div className="flex items-center gap-2">
                 <button
                   disabled={page <= 1}
                   onClick={() => setPage(page - 1)}
-                  className="rounded-md border border-gray-300 bg-white hover:bg-gray-50 px-3.5 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50"
+                  className="min-h-[36px] rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50 transition-colors focus-visible:outline-2 focus-visible:outline-slate-600"
                 >
                   Previous
                 </button>
                 <button
                   disabled={page >= data.pagination.pages}
                   onClick={() => setPage(page + 1)}
-                  className="rounded-md border border-gray-300 bg-white hover:bg-gray-50 px-3.5 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50"
+                  className="min-h-[36px] rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50 transition-colors focus-visible:outline-2 focus-visible:outline-slate-600"
                 >
                   Next
                 </button>

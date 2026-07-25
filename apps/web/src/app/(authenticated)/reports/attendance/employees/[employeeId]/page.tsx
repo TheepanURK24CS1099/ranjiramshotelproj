@@ -49,16 +49,16 @@ type ReportData = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  PRESENT: "bg-green-100 text-green-800",
-  LATE: "bg-yellow-100 text-yellow-800",
-  ABSENT: "bg-red-100 text-red-800",
-  EARLY_EXIT: "bg-orange-100 text-orange-800",
-  LATE_AND_EARLY_EXIT: "bg-orange-200 text-orange-900",
-  HALF_DAY: "bg-blue-100 text-blue-800",
-  MISSING_PUNCH: "bg-red-200 text-red-900",
-  WEEKLY_OFF: "bg-gray-100 text-gray-600",
-  HOLIDAY: "bg-purple-100 text-purple-800",
-  NO_SHIFT: "bg-gray-100 text-gray-500",
+  PRESENT: "bg-emerald-50 text-emerald-800 border-emerald-300",
+  LATE: "bg-amber-50 text-amber-800 border-amber-300",
+  ABSENT: "bg-rose-50 text-rose-800 border-rose-300",
+  EARLY_EXIT: "bg-amber-50 text-amber-800 border-amber-300",
+  LATE_AND_EARLY_EXIT: "bg-amber-100 text-amber-900 border-amber-300",
+  HALF_DAY: "bg-sky-50 text-sky-800 border-sky-300",
+  MISSING_PUNCH: "bg-rose-100 text-rose-900 border-rose-300",
+  WEEKLY_OFF: "bg-slate-100 text-slate-600 border-slate-200",
+  HOLIDAY: "bg-purple-50 text-purple-800 border-purple-300",
+  NO_SHIFT: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
 function todayMinus(days: number) {
@@ -106,9 +106,15 @@ export default function EmployeeAttendanceReportPage() {
       .finally(() => setLoading(false));
   }, [employeeId, appliedFrom, appliedTo, page]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const applyFilters = () => { setPage(1); setAppliedFrom(fromDate); setAppliedTo(toDate); };
+  const applyFilters = () => {
+    setPage(1);
+    setAppliedFrom(fromDate);
+    setAppliedTo(toDate);
+  };
 
   const exportFile = async (format: "csv" | "pdf") => {
     const q = new URLSearchParams({ fromDate: appliedFrom, toDate: appliedTo });
@@ -116,7 +122,10 @@ export default function EmployeeAttendanceReportPage() {
       `${config.apiUrl}/reports/employees/${employeeId}/attendance/export.${format}?${q.toString()}`,
       { credentials: "include" }
     );
-    if (!response.ok) { setError("Export failed"); return; }
+    if (!response.ok) {
+      setError("Export failed");
+      return;
+    }
     const url = URL.createObjectURL(await response.blob());
     const a = document.createElement("a");
     a.href = url;
@@ -131,192 +140,231 @@ export default function EmployeeAttendanceReportPage() {
   const pagination = data?.pagination;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      {/* Back button + title */}
-      <div className="flex items-center gap-3">
-        <button
-          id="btn-back-to-attendance"
-          onClick={() => router.back()}
-          className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 border rounded px-3 py-1.5"
-        >
-          ← Back to Attendance
-        </button>
-        <h1 className="text-2xl font-bold">Individual Attendance Report</h1>
+    <div className="max-w-7xl mx-auto space-y-6 py-4">
+      {/* Navigation Header */}
+      <div className="flex flex-col gap-2 border-b border-slate-200/80 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            id="btn-back-to-attendance"
+            onClick={() => router.back()}
+            className="inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl px-3 py-1.5 shadow-xs hover:bg-slate-50 transition-colors focus-visible:outline-2 focus-visible:outline-slate-600"
+          >
+            ← Back to Attendance
+          </button>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+            Individual Attendance Report
+          </h1>
+        </div>
       </div>
 
-      {/* Employee header card */}
+      {/* Employee Header Card */}
       {emp && (
-        <div className="bg-white rounded shadow p-5 grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Name</div>
-            <div className="font-semibold text-lg">{emp.name}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Employee Name</div>
+            <div className="font-extrabold text-slate-900 text-base mt-0.5">{emp.name}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Employee Code</div>
-            <div className="font-medium">{emp.employee_code}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Code</div>
+            <div className="font-mono font-bold text-slate-900 text-sm mt-0.5">{emp.employee_code}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Biometric ID</div>
-            <div className="font-medium">{emp.biometric_id}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Biometric ID</div>
+            <div className="font-mono font-bold text-slate-900 text-sm mt-0.5">{emp.biometric_id}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Shift</div>
-            <div className="font-medium">{emp.current_shift}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Shift</div>
+            <div className="font-semibold text-slate-800 text-sm mt-0.5">{emp.current_shift}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Status</div>
-            <span
-              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                emp.active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-              }`}
-            >
-              {emp.active ? "Active" : "Inactive"}
-            </span>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</div>
+            <div className="mt-0.5">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${
+                  emp.active ? "bg-emerald-50 text-emerald-800 border-emerald-300" : "bg-rose-50 text-rose-800 border-rose-300"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${emp.active ? "bg-emerald-500" : "bg-rose-500"}`} aria-hidden="true" />
+                {emp.active ? "Active" : "Inactive"}
+              </span>
+            </div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Period</div>
-            <div className="font-medium">{appliedFrom} → {appliedTo}</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Period</div>
+            <div className="font-semibold text-slate-800 text-xs mt-0.5">
+              {appliedFrom} → {appliedTo}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Filters and export actions */}
-      <div className="bg-white rounded shadow p-4 flex flex-wrap items-end gap-4">
-        <label className="text-sm">
-          <span className="block text-gray-600 mb-1">From date</span>
-          <input
-            id="input-from-date"
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="border rounded px-2 py-1.5"
-          />
-        </label>
-        <label className="text-sm">
-          <span className="block text-gray-600 mb-1">To date</span>
-          <input
-            id="input-to-date"
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="border rounded px-2 py-1.5"
-          />
-        </label>
-        <button
-          id="btn-apply-filters"
-          onClick={applyFilters}
-          className="rounded bg-blue-600 text-white px-4 py-1.5 text-sm hover:bg-blue-700"
-        >
-          Apply
-        </button>
-        <div className="flex-1" />
-        <button
-          id="btn-export-csv"
-          onClick={() => void exportFile("csv")}
-          className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
-        >
-          CSV / Excel
-        </button>
-        <button
-          id="btn-export-pdf"
-          onClick={() => void exportFile("pdf")}
-          className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
-        >
-          Printable PDF
-        </button>
+      {/* Date Filter & Export Controls Card */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs font-semibold text-slate-700">
+            <span className="block text-slate-600 mb-1">From date</span>
+            <input
+              id="input-from-date"
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-900 focus:border-teal-500 focus:bg-white focus-visible:outline-2 focus-visible:outline-teal-600"
+            />
+          </label>
+
+          <label className="text-xs font-semibold text-slate-700">
+            <span className="block text-slate-600 mb-1">To date</span>
+            <input
+              id="input-to-date"
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-900 focus:border-teal-500 focus:bg-white focus-visible:outline-2 focus-visible:outline-teal-600"
+            />
+          </label>
+
+          <button
+            id="btn-apply-filters"
+            onClick={applyFilters}
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#028174] hover:bg-[#026c61] text-white px-5 py-2.5 text-sm font-semibold shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-teal-600 focus-visible:outline-offset-2"
+          >
+            Apply Filters
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+          <button
+            id="btn-export-csv"
+            onClick={() => void exportFile("csv")}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-slate-600"
+          >
+            <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            CSV / Excel
+          </button>
+          <button
+            id="btn-export-pdf"
+            onClick={() => void exportFile("pdf")}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-slate-600"
+          >
+            <svg className="h-4 w-4 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Printable PDF
+          </button>
+        </div>
       </div>
 
       {/* Error banner */}
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-red-700">{error}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-medium text-rose-700 flex items-center gap-2" role="alert">
+          <svg className="h-5 w-5 shrink-0 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{error}</span>
+        </div>
       )}
 
-      {/* Summary cards */}
+      {/* Summary Cards */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {SUMMARY_LABELS.map(([key, label]) => (
-            <div key={key} className="rounded bg-white shadow p-4">
-              <div className="text-xs text-gray-500">{label}</div>
-              <div className="text-xl font-semibold mt-1">{String(summary[key])}</div>
+            <div key={key} className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</div>
+              <div className="text-xl font-extrabold text-slate-900 mt-1">{String(summary[key])}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Daily records table */}
+      {/* Daily Records Table & Cards */}
       {loading ? (
-        <div className="p-8 text-center text-gray-500">Loading report…</div>
+        <div className="rounded-2xl bg-white p-12 text-center text-slate-500 text-sm font-medium shadow-xs border border-slate-200/90" role="status">
+          Loading report…
+        </div>
       ) : (
-        <div className="overflow-x-auto rounded bg-white shadow">
+        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
           {items.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">No attendance records for this period.</div>
+            <div className="p-12 text-center text-slate-500 text-sm font-medium">
+              No attendance records for this period.
+            </div>
           ) : (
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Date</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Shift</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">First Punch In</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Last Punch Out</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Worked Duration</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Status</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Late By</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Early Exit By</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Overtime</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Missing Punch</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row, i) => (
-                  <tr key={i} className="border-t hover:bg-gray-50">
-                    <td className="px-3 py-2 whitespace-nowrap font-medium">{row.date}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.shift}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.first_punch_in ?? "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.last_punch_out ?? "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.worked_duration}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                          STATUS_COLORS[row.attendance_status] ?? "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {row.attendance_status.replaceAll("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.late_by}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.early_exit_by}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.overtime}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.missing_punch}</td>
-                    <td className="px-3 py-2 max-w-xs truncate" title={row.notes}>{row.notes}</td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200/80 bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3.5 whitespace-nowrap">Date</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Shift</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">First Punch In</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Last Punch Out</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Worked Duration</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Status</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Late By</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Early Exit By</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Overtime</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Missing Punch</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Notes</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {items.map((row, i) => (
+                    <tr key={i} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-4 py-3.5 whitespace-nowrap font-bold text-slate-900">{row.date}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap font-medium text-slate-700">{row.shift}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-800">{row.first_punch_in ?? "—"}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-800">{row.last_punch_out ?? "—"}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap font-semibold text-slate-900">{row.worked_duration}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold border ${
+                            STATUS_COLORS[row.attendance_status] ?? "bg-slate-100 text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          {row.attendance_status.replaceAll("_", " ")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-700">{row.late_by}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-700">{row.early_exit_by}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-700">{row.overtime}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-700">{row.missing_punch}</td>
+                      <td className="px-4 py-3.5 max-w-xs truncate text-xs text-slate-500" title={row.notes}>
+                        {row.notes}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
 
       {/* Pagination */}
       {pagination && pagination.pages > 1 && (
-        <div className="flex items-center gap-3">
-          <button
-            id="btn-prev-page"
-            disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
-            className="rounded border px-3 py-1.5 text-sm disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span className="text-sm">Page {pagination.page} of {pagination.pages}</span>
-          <button
-            id="btn-next-page"
-            disabled={page >= pagination.pages}
-            onClick={() => setPage(page + 1)}
-            className="rounded border px-3 py-1.5 text-sm disabled:opacity-50"
-          >
-            Next
-          </button>
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <span className="text-xs text-slate-600 font-medium">
+            Page <span className="font-bold text-slate-900">{pagination.page}</span> of{" "}
+            <span className="font-bold text-slate-900">{pagination.pages}</span>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              id="btn-prev-page"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+              className="min-h-[36px] rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50 transition-colors focus-visible:outline-2 focus-visible:outline-slate-600"
+            >
+              Previous
+            </button>
+            <button
+              id="btn-next-page"
+              disabled={page >= pagination.pages}
+              onClick={() => setPage(page + 1)}
+              className="min-h-[36px] rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50 transition-colors focus-visible:outline-2 focus-visible:outline-slate-600"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>
