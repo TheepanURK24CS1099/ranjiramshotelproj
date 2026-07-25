@@ -38,8 +38,8 @@ export async function attendance(q: Query) {
       e.name AS employee_name,
       e.id AS employee_id,
       COALESCE(e.employee_code,'—') AS employee_code,
-      a.biometric_id::text AS biometric_id,
-      COALESCE(s.name, 'Historical/Unassigned') AS shift,
+      COALESCE(e.biometric_id::text, '—') AS biometric_id,
+      COALESCE(cs.name, MAX(s.name), 'Historical/Unassigned') AS shift,
       CASE WHEN e.active THEN 'Active' WHEN e.active IS FALSE THEN 'Inactive' ELSE '—' END AS active_status,
       COUNT(*)::int AS total_working_days,
       COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY'))::int AS present_days,
@@ -52,11 +52,19 @@ export async function attendance(q: Query) {
       '0.0'::text AS overtime_hours,
       'View Report' AS view_report
     FROM daily_attendance_records a
-    LEFT JOIN employees e ON e.id=a.employee_id
-    LEFT JOIN shifts s ON s.id=a.shift_id
+    LEFT JOIN employees e ON e.id = a.employee_id
+    LEFT JOIN shifts s ON s.id = a.shift_id
+    LEFT JOIN LATERAL (
+      SELECT sh.name
+      FROM employee_shift_assignments esa
+      JOIN shifts sh ON sh.id = esa.shift_id
+      WHERE esa.employee_id = e.id AND esa.effective_to IS NULL
+      ORDER BY esa.effective_from DESC
+      LIMIT 1
+    ) cs ON true
     ${where}
-    GROUP BY e.id, e.name, e.employee_code, e.active, e.biometric_id, a.biometric_id, s.name
-    ORDER BY e.name NULLS LAST, a.biometric_id
+    GROUP BY e.id, e.name, e.employee_code, e.active, e.biometric_id, cs.name
+    ORDER BY e.name NULLS LAST, e.biometric_id
     LIMIT $${v.length-1} OFFSET $${v.length}
   `;
 
@@ -251,6 +259,10 @@ export async function unmatchedBiometrics(q: Query) {
   const v: unknown[] = [];
   if (from) { v.push(from); c.push(`a.attendance_date >= $${v.length}::date`); }
   if (to) { v.push(to); c.push(`a.attendance_date <= $${v.length}::date`); }
+  filter(q, c, v, "a.biometric_id::text", "biometricId");
+  filter(q, c, v, "a.shift_id", "shiftId");
+  filter(q, c, v, "a.status", "status");
+
   const where = `WHERE ${c.join(" AND ")}`;
   const { limit, offset } = paging(q);
   v.push(limit, offset);
@@ -258,20 +270,20 @@ export async function unmatchedBiometrics(q: Query) {
   const sql = `
     SELECT
       a.biometric_id::text AS biometric_id,
-      COALESCE(d.name, d.device_code, '—') AS device_name,
-      MIN(a.attendance_date)::text AS first_seen,
-      MAX(a.attendance_date)::text AS last_seen,
+      COALESCE(MAX(d.name), 'Unknown Device') AS device_name,
+      to_char(MIN(a.attendance_date), 'YYYY-MM-DD') AS first_seen,
+      to_char(MAX(a.attendance_date), 'YYYY-MM-DD') AS last_seen,
       COUNT(*)::int AS total_records
     FROM daily_attendance_records a
-    LEFT JOIN raw_attendance_punches p ON p.id = a.first_raw_punch_id AND p.biometric_id = a.biometric_id
+    LEFT JOIN raw_attendance_punches p ON p.id = a.first_raw_punch_id
     LEFT JOIN devices d ON d.id = p.device_id
     ${where}
-    GROUP BY a.biometric_id, d.name, d.device_code
-    ORDER BY MAX(a.attendance_date) DESC, a.biometric_id
+    GROUP BY a.biometric_id
+    ORDER BY a.biometric_id
     LIMIT $${v.length - 1} OFFSET $${v.length}
   `;
 
-  const countSql = `
+  const countQuery = `
     SELECT COUNT(DISTINCT a.biometric_id)::int AS total
     FROM daily_attendance_records a
     ${where}
@@ -279,12 +291,31 @@ export async function unmatchedBiometrics(q: Query) {
 
   const [rows, countRes] = await Promise.all([
     pool.query(sql, v),
-    pool.query<{ total: number }>(countSql, v.slice(0, -2)),
+    pool.query<{ total: number }>(countQuery, v.slice(0, -2)),
   ]);
 
-  return result(rows.rows, Number(countRes.rows[0]?.total ?? 0), q, {
-    totalUnmatched: Number(countRes.rows[0]?.total ?? 0),
-  });
+  return result(rows.rows, Number(countRes.rows[0]?.total ?? 0), q, {});
 }
 
-export async function report(name: ReportName,q:Query) { return ({"attendance-summary":attendance,"payroll-summary":payroll,"salary-history":salary,"advances":advances,"device-logs":devices,"raw-punches":punches,"attendance-exceptions":exceptions,"unmatched-biometrics":unmatchedBiometrics}[name])(q); }
+export async function report(name: ReportName, q: Query) {
+  switch (name) {
+    case "attendance-summary":
+      return attendance(q);
+    case "payroll-summary":
+      return payroll(q);
+    case "salary-history":
+      return salary(q);
+    case "advances":
+      return advances(q);
+    case "device-logs":
+      return devices(q);
+    case "raw-punches":
+      return punches(q);
+    case "attendance-exceptions":
+      return exceptions(q);
+    case "unmatched-biometrics":
+      return unmatchedBiometrics(q);
+    default:
+      throw new Error("Validation: Invalid report name");
+  }
+}
