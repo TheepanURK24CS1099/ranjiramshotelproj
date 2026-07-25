@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient, ApiError } from "@/lib/api-client";
+import styles from "./login.module.css";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,35 +33,61 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-900">Hotel Management Login</h1>
-        
+    <main className={styles.page}>
+      <Image
+        src="/images/ranjirams-hotel-login.jpg"
+        alt=""
+        fill
+        priority
+        quality={75}
+        sizes="100vw"
+        className={styles.background}
+      />
+      <div className={styles.overlay} aria-hidden="true" />
+
+      <section className={styles.card} aria-labelledby="login-heading">
+        <div className={styles.cardHighlight} aria-hidden="true" />
+
+        <header className={styles.header}>
+          <p className={styles.eyebrow}>Welcome back</p>
+          <h1 id="login-heading" className={styles.title}>
+            Ranjirams Hotel
+          </h1>
+          <p className={styles.subtitle}>Hotel Management Login</p>
+        </header>
+
         {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-100 rounded">
-            {error}
+          <div className={styles.error} role="alert" aria-live="assertive">
+            <span className={styles.errorIcon} aria-hidden="true">!</span>
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Username</label>
+        <form onSubmit={handleLogin} className={styles.form}>
+          <div className={styles.field}>
+            <label htmlFor="username" className={styles.label}>Username</label>
             <input
+              id="username"
+              name="username"
               type="text"
               placeholder="admin"
               required
-              className="w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-[#028174] focus:border-blue-500"
+              autoComplete="username"
+              className={styles.input}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Password</label>
+          <div className={styles.field}>
+            <label htmlFor="password" className={styles.label}>Password</label>
             <input
+              id="password"
+              name="password"
               type="password"
               required
-              className="w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-[#028174] focus:border-blue-500"
+              autoComplete="current-password"
+              className={styles.input}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -68,12 +96,12 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-2 font-medium text-white bg-blue-600 rounded-md hover:bg-[#026c61] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#028174] disabled:bg-[#E5E7EB] disabled:text-[#64748B] disabled:opacity-100 disabled:border-transparent"
+            className={styles.submit}
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
