@@ -1,11 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import { formatAttendanceDate, formatTimeOnly, formatWorkingMinutes } from "@/lib/format";
 import { ConfirmationModal } from "@/components/confirmation-modal";
 
-type AttendanceStatus = "PRESENT" | "CURRENTLY_CHECKED_IN" | "MISSING_PUNCH" | "UNMATCHED" | "NO_SHIFT";
+type AttendanceStatus = "PRESENT" | "CURRENTLY_CHECKED_IN" | "MISSING_PUNCH" | "UNMATCHED" | "NO_SHIFT" | "LATE" | "EARLY_EXIT" | "LATE_AND_EARLY_EXIT" | "HALF_DAY" | "ABSENT" | "PENDING" | "CHECK_IN_MISSING" | "WEEKLY_OFF" | "HOLIDAY";
+
+type SessionRecord = {
+  session_id?: string;
+  session_number: number;
+  session_name: string;
+  start_time: string;
+  end_time: string;
+  crosses_midnight: boolean;
+  grace_minutes: number;
+  minimum_work_minutes: number;
+  early_exit_tolerance_minutes: number;
+  checkin_before_minutes: number;
+  checkout_after_minutes: number;
+  punch_in_id: number | null;
+  punch_in_at: string | null;
+  punch_out_id: number | null;
+  punch_out_at: string | null;
+  worked_minutes: number;
+  expected_minutes: number;
+  late_minutes: number;
+  early_exit_minutes: number;
+  missing_punch: boolean;
+  status: string;
+};
 
 type AttendanceRow = {
   attendance_key: string;
@@ -24,6 +48,7 @@ type AttendanceRow = {
   early_exit_minutes: number;
   note: string | null;
   status: AttendanceStatus;
+  session_records?: SessionRecord[];
 };
 
 type AttendanceException = {
@@ -515,66 +540,101 @@ export default function AttendancePage() {
                 {rows.map((row) => {
                   const isChecked = selected.includes(row.attendance_key);
                   return (
-                    <tr key={row.attendance_key} className={`transition-colors hover:bg-slate-50/60 ${isChecked ? "bg-teal-50/40" : ""}`}>
-                      {role === "ADMIN" && (
-                        <td className="p-3.5">
-                          <input
-                            aria-label={`Select ${row.attendance_key}`}
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggle(row.attendance_key)}
-                            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                          />
+                    <Fragment key={row.attendance_key}>
+                      <tr className={`transition-colors hover:bg-slate-50/60 ${isChecked ? "bg-teal-50/40" : ""}`}>
+                        {role === "ADMIN" && (
+                          <td className="p-3.5">
+                            <input
+                              aria-label={`Select ${row.attendance_key}`}
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggle(row.attendance_key)}
+                              className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                            />
+                          </td>
+                        )}
+                        <td className="p-3.5 font-medium text-slate-900">{formatAttendanceDate(row.attendance_date)}</td>
+                        <td className="p-3.5 font-mono text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200/60">
+                          #{row.biometric_id}
                         </td>
+                        <td className="p-3.5 font-semibold text-slate-900">{row.employee_name ?? "Unmatched"}</td>
+                        <td className="p-3.5 font-mono text-xs text-slate-600">{row.employee_code}</td>
+                        <td className="p-3.5 text-slate-600">{row.shift_name ?? "—"}</td>
+                        <td className="p-3.5 font-medium text-slate-900">{formatTimeOnly(row.punch_in_at)}</td>
+                        <td className="p-3.5 font-medium text-slate-900">{formatTimeOnly(row.punch_out_at)}</td>
+                        <td className="p-3.5 text-center font-mono font-semibold text-slate-700">{row.raw_punch_count}</td>
+                        <td className="p-3.5">
+                          {row.late_minutes > 0 ? (
+                            <span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                              {row.late_minutes} min
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">0</span>
+                          )}
+                        </td>
+                        <td className="p-3.5">
+                          {row.early_exit_minutes > 0 ? (
+                            <span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                              {row.early_exit_minutes} min
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">0</span>
+                          )}
+                        </td>
+                        <td className="p-3.5 font-semibold text-slate-900">{formatWorkingMinutes(row.working_minutes)}</td>
+                        <td className="p-3.5 text-slate-500">{row.note ?? "—"}</td>
+                        <td className="p-3.5">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold border ${
+                              row.status === "PRESENT"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                : row.status === "CURRENTLY_CHECKED_IN"
+                                  ? "bg-sky-50 text-sky-800 border-sky-300"
+                                  : row.status === "MISSING_PUNCH"
+                                    ? "bg-amber-50 text-amber-800 border-amber-300"
+                                    : row.status === "NO_SHIFT"
+                                      ? "bg-purple-50 text-purple-800 border-purple-300"
+                                      : "bg-slate-100 text-slate-700 border-slate-200"
+                            }`}
+                          >
+                            {row.status.replaceAll("_", " ")}
+                          </span>
+                        </td>
+                      </tr>
+
+                      {row.session_records && row.session_records.length > 0 && (
+                        <tr className="bg-slate-50/40">
+                          <td colSpan={role === "ADMIN" ? 14 : 13} className="px-6 py-3">
+                            <div className="text-xs font-bold text-slate-700 mb-2">
+                              Sessions Breakdown ({row.session_records.length} session{row.session_records.length === 1 ? "" : "s"}):
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {row.session_records.map((sr) => (
+                                <div key={`sr-${sr.session_number}`} className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5 text-xs shadow-xs">
+                                  <div className="flex items-center justify-between border-b border-slate-100 pb-1 font-semibold text-slate-800">
+                                    <span>{sr.session_name}</span>
+                                    <span className="text-slate-500 font-mono">{sr.start_time} - {sr.end_time}</span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-1 text-slate-600">
+                                    <div>In: <strong className="text-slate-900">{formatTimeOnly(sr.punch_in_at)}</strong></div>
+                                    <div>Out: <strong className="text-slate-900">{formatTimeOnly(sr.punch_out_at)}</strong></div>
+                                    <div>Work: <strong className="text-[#028174]">{formatWorkingMinutes(sr.worked_minutes)}</strong></div>
+                                    <div>Status: <span className="font-bold text-slate-700">{sr.status.replaceAll("_", " ")}</span></div>
+                                  </div>
+                                  {(sr.late_minutes > 0 || sr.early_exit_minutes > 0 || sr.missing_punch) && (
+                                    <div className="flex flex-wrap gap-1 pt-1 text-[11px]">
+                                      {sr.late_minutes > 0 && <span className="bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">Late {sr.late_minutes}m</span>}
+                                      {sr.early_exit_minutes > 0 && <span className="bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">Early {sr.early_exit_minutes}m</span>}
+                                      {sr.missing_punch && <span className="bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded">Missing Punch</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                      <td className="p-3.5 font-medium text-slate-900">{formatAttendanceDate(row.attendance_date)}</td>
-                      <td className="p-3.5 font-mono text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200/60">
-                        #{row.biometric_id}
-                      </td>
-                      <td className="p-3.5 font-semibold text-slate-900">{row.employee_name ?? "Unmatched"}</td>
-                      <td className="p-3.5 font-mono text-xs text-slate-600">{row.employee_code}</td>
-                      <td className="p-3.5 text-slate-600">{row.shift_name ?? "—"}</td>
-                      <td className="p-3.5 font-medium text-slate-900">{formatTimeOnly(row.punch_in_at)}</td>
-                      <td className="p-3.5 font-medium text-slate-900">{formatTimeOnly(row.punch_out_at)}</td>
-                      <td className="p-3.5 text-center font-mono font-semibold text-slate-700">{row.raw_punch_count}</td>
-                      <td className="p-3.5">
-                        {row.late_minutes > 0 ? (
-                          <span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
-                            {row.late_minutes} min
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">0</span>
-                        )}
-                      </td>
-                      <td className="p-3.5">
-                        {row.early_exit_minutes > 0 ? (
-                          <span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
-                            {row.early_exit_minutes} min
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">0</span>
-                        )}
-                      </td>
-                      <td className="p-3.5 font-semibold text-slate-900">{formatWorkingMinutes(row.working_minutes)}</td>
-                      <td className="p-3.5 text-slate-500">{row.note ?? "—"}</td>
-                      <td className="p-3.5">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold border ${
-                            row.status === "PRESENT"
-                              ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                              : row.status === "CURRENTLY_CHECKED_IN"
-                                ? "bg-sky-50 text-sky-800 border-sky-300"
-                                : row.status === "MISSING_PUNCH"
-                                  ? "bg-amber-50 text-amber-800 border-amber-300"
-                                  : row.status === "NO_SHIFT"
-                                    ? "bg-purple-50 text-purple-800 border-purple-300"
-                                    : "bg-slate-100 text-slate-700 border-slate-200"
-                          }`}
-                        >
-                          {row.status.replaceAll("_", " ")}
-                        </span>
-                      </td>
-                    </tr>
+                    </Fragment>
                   );
                 })}
 
@@ -647,22 +707,42 @@ export default function AttendancePage() {
                       <span className="font-semibold text-slate-900">{formatAttendanceDate(row.attendance_date)}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">Punch In:</span>
+                      <span className="text-slate-500 block">First In:</span>
                       <span className="font-semibold text-slate-900">{formatTimeOnly(row.punch_in_at)}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">Punch Out:</span>
+                      <span className="text-slate-500 block">Last Out:</span>
                       <span className="font-semibold text-slate-900">{formatTimeOnly(row.punch_out_at)}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">Working Hours:</span>
-                      <span className="font-bold text-slate-900">{formatWorkingMinutes(row.working_minutes)}</span>
+                      <span className="text-slate-500 block">Total Work:</span>
+                      <span className="font-bold text-teal-800">{formatWorkingMinutes(row.working_minutes)}</span>
                     </div>
                     <div>
                       <span className="text-slate-500 block">Punches Count:</span>
                       <span className="font-semibold text-slate-900">{row.raw_punch_count}</span>
                     </div>
                   </div>
+
+                  {row.session_records && row.session_records.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="text-xs font-bold text-slate-700">Sessions Breakdown:</div>
+                      {row.session_records.map((sr) => (
+                        <div key={`m-sr-${sr.session_number}`} className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs space-y-1">
+                          <div className="flex items-center justify-between font-bold text-slate-800">
+                            <span>{sr.session_name}</span>
+                            <span className="text-slate-500 font-mono text-[11px]">{sr.start_time} - {sr.end_time}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1 text-slate-600">
+                            <div>In: <strong>{formatTimeOnly(sr.punch_in_at)}</strong></div>
+                            <div>Out: <strong>{formatTimeOnly(sr.punch_out_at)}</strong></div>
+                            <div>Work: <strong className="text-[#028174]">{formatWorkingMinutes(sr.worked_minutes)}</strong></div>
+                            <div>Status: <strong className="text-slate-800">{sr.status.replaceAll("_", " ")}</strong></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {(row.late_minutes > 0 || row.early_exit_minutes > 0 || row.note) && (
                     <div className="flex flex-wrap gap-2 text-xs">
