@@ -5,9 +5,61 @@ const IST_OFFSET_MINUTES = 330;
 const IST_OFFSET_MS = IST_OFFSET_MINUTES * 60_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MISSING_PUNCH_BUFFER_MINUTES = 15;
-function attendanceNow(): Date { const value = process.env.ATTENDANCE_TEST_NOW; return value ? new Date(value) : new Date(); }
+function attendanceNow(): Date {
+  const value = process.env.ATTENDANCE_TEST_NOW;
+  return value ? new Date(value) : new Date();
+}
 
-export type AttendanceStatus = "PRESENT" | "LATE" | "EARLY_EXIT" | "LATE_AND_EARLY_EXIT" | "HALF_DAY" | "ABSENT" | "MISSING_PUNCH" | "CURRENTLY_CHECKED_IN" | "PENDING" | "CHECK_IN_MISSING" | "WEEKLY_OFF" | "HOLIDAY" | "NO_SHIFT" | "UNMATCHED";
+export type AttendanceStatus =
+  | "PRESENT"
+  | "LATE"
+  | "EARLY_EXIT"
+  | "LATE_AND_EARLY_EXIT"
+  | "HALF_DAY"
+  | "ABSENT"
+  | "MISSING_PUNCH"
+  | "CURRENTLY_CHECKED_IN"
+  | "PENDING"
+  | "CHECK_IN_MISSING"
+  | "WEEKLY_OFF"
+  | "HOLIDAY"
+  | "NO_SHIFT"
+  | "UNMATCHED";
+
+export type SessionStatus =
+  | "NOT_STARTED"
+  | "CURRENTLY_CHECKED_IN"
+  | "COMPLETED"
+  | "MISSING_IN"
+  | "MISSING_OUT"
+  | "LATE"
+  | "EARLY_EXIT"
+  | "LATE_AND_EARLY_EXIT"
+  | "EXCEPTION";
+
+export interface SessionRecord {
+  session_id?: string;
+  session_number: number;
+  session_name: string;
+  start_time: string;
+  end_time: string;
+  crosses_midnight: boolean;
+  grace_minutes: number;
+  minimum_work_minutes: number;
+  early_exit_tolerance_minutes: number;
+  checkin_before_minutes: number;
+  checkout_after_minutes: number;
+  punch_in_id: number | null;
+  punch_in_at: string | null;
+  punch_out_id: number | null;
+  punch_out_at: string | null;
+  worked_minutes: number;
+  expected_minutes: number;
+  late_minutes: number;
+  early_exit_minutes: number;
+  missing_punch: boolean;
+  status: SessionStatus;
+}
 
 export interface AttendanceRecord {
   attendance_key: string;
@@ -30,6 +82,7 @@ export interface AttendanceRecord {
   last_raw_punch_id: number | null;
   unmatched_raw_punch_id: number | null;
   holiday_id: string | null;
+  session_records?: SessionRecord[];
 }
 
 interface RawPunchRow {
@@ -52,6 +105,25 @@ interface ShiftAssignmentRow {
   checkin_before_minutes: number;
   checkout_after_minutes: number;
   weekly_off_days: number[];
+}
+
+export interface ShiftSessionRow {
+  id: string;
+  shift_id: string;
+  session_number: number;
+  start_time: string;
+  end_time: string;
+  grace_minutes: number;
+  minimum_work_minutes: number;
+  early_exit_tolerance_minutes: number;
+  checkin_before_minutes: number;
+  checkout_after_minutes: number;
+  crosses_midnight: boolean;
+  active: boolean;
+}
+
+export interface ShiftAssignmentWithSessions extends ShiftAssignmentRow {
+  sessions: ShiftSessionRow[];
 }
 
 export interface AttendanceFilters {
@@ -81,7 +153,11 @@ export interface AttendanceException {
   message: string;
 }
 
-type AttendanceUpsertRecord = Omit<AttendanceRecord, "employee_name" | "employee_code" | "shift_name" | "late_minutes" | "early_exit_minutes" | "note" | "holiday_id"> & Partial<Pick<AttendanceRecord, "late_minutes" | "early_exit_minutes" | "note" | "holiday_id">>;
+type AttendanceUpsertRecord = Omit<
+  AttendanceRecord,
+  "employee_name" | "employee_code" | "shift_name" | "late_minutes" | "early_exit_minutes" | "note" | "holiday_id"
+> &
+  Partial<Pick<AttendanceRecord, "late_minutes" | "early_exit_minutes" | "note" | "holiday_id" | "session_records">>;
 
 function assertDate(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
@@ -156,42 +232,18 @@ function isOvernightShift(startTime: string | null, endTime: string | null, isOv
   return parseTimeParts(endTime).hours < parseTimeParts(startTime).hours || endTime <= startTime;
 }
 
-function attendanceWindowEnd(shiftEnd: Date, overnight: boolean, checkoutAfterMinutes: number): Date {
-  if (overnight) {
-    return shiftEnd;
-  }
-
-  return new Date(shiftEnd.getTime() + checkoutAfterMinutes * 60_000);
-}
-
-function attendanceStatusForPunches(first: RawPunchRow, last: RawPunchRow, shiftStart: Date, shiftEnd: Date, shift: ShiftAssignmentRow): { status: AttendanceStatus; lateMinutes: number; earlyExitMinutes: number; note: string | null } {
-  if (first.id === last.id) { const now=attendanceNow(); const deadline=new Date(shiftEnd.getTime()+MISSING_PUNCH_BUFFER_MINUTES*60_000); const lateMinutes=Math.max(0,minutesBetween(new Date(shiftStart.getTime()+shift.grace_minutes*60_000),first.punch_time)); return now<deadline ? { status: "CURRENTLY_CHECKED_IN", lateMinutes, earlyExitMinutes: 0, note: lateMinutes ? `Late by ${lateMinutes} minutes; awaiting punch out` : "Awaiting punch out" } : { status: "MISSING_PUNCH", lateMinutes, earlyExitMinutes: 0, note: "Missing punch out" }; }
-  // Existing shifts with no configured attendance rules retain the validated Part 13 PRESENT behavior.
-  if (shift.grace_minutes === 0 && shift.minimum_work_minutes === 0 && shift.early_exit_tolerance_minutes === 0) {
-    return { status: "PRESENT", lateMinutes: 0, earlyExitMinutes: 0, note: null };
-  }
-  const lateMinutes = Math.max(0, minutesBetween(new Date(shiftStart.getTime() + shift.grace_minutes * 60_000), first.punch_time));
-  const earlyExitMinutes = Math.max(0, minutesBetween(last.punch_time, new Date(shiftEnd.getTime() - shift.early_exit_tolerance_minutes * 60_000)));
-  const worked = minutesBetween(first.punch_time, last.punch_time);
-  if (shift.minimum_work_minutes > 0 && worked < shift.minimum_work_minutes) return { status: "HALF_DAY", lateMinutes, earlyExitMinutes, note: "Below minimum working minutes" };
-  if (lateMinutes && earlyExitMinutes) return { status: "LATE_AND_EARLY_EXIT", lateMinutes, earlyExitMinutes, note: null };
-  if (lateMinutes) return { status: "LATE", lateMinutes, earlyExitMinutes, note: null };
-  if (earlyExitMinutes) return { status: "EARLY_EXIT", lateMinutes, earlyExitMinutes, note: null };
-  return { status: "PRESENT", lateMinutes: 0, earlyExitMinutes: 0, note: null };
-}
-
 function sortPunches(punches: RawPunchRow[]): RawPunchRow[] {
   return [...punches].sort((left, right) => {
     const timeDelta = left.punch_time.getTime() - right.punch_time.getTime();
     if (timeDelta !== 0) {
       return timeDelta;
     }
-
     return left.id - right.id;
   });
 }
 
 async function upsertAttendanceRecord(record: AttendanceUpsertRecord): Promise<void> {
+  const sessionRecordsJson = JSON.stringify(record.session_records ?? []);
   await pool.query(
     `INSERT INTO daily_attendance_records (
       attendance_key,
@@ -209,9 +261,10 @@ async function upsertAttendanceRecord(record: AttendanceUpsertRecord): Promise<v
       status,
       first_raw_punch_id,
       last_raw_punch_id,
-      unmatched_raw_punch_id
-      ,holiday_id
-    ) VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      unmatched_raw_punch_id,
+      holiday_id,
+      session_records
+    ) VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb)
     ON CONFLICT (attendance_key) DO UPDATE SET
       attendance_date = EXCLUDED.attendance_date,
       employee_id = EXCLUDED.employee_id,
@@ -228,7 +281,8 @@ async function upsertAttendanceRecord(record: AttendanceUpsertRecord): Promise<v
       status = EXCLUDED.status,
       first_raw_punch_id = EXCLUDED.first_raw_punch_id,
       last_raw_punch_id = EXCLUDED.last_raw_punch_id,
-      unmatched_raw_punch_id = EXCLUDED.unmatched_raw_punch_id`,
+      unmatched_raw_punch_id = EXCLUDED.unmatched_raw_punch_id,
+      session_records = EXCLUDED.session_records`,
     [
       record.attendance_key,
       record.attendance_date,
@@ -247,7 +301,8 @@ async function upsertAttendanceRecord(record: AttendanceUpsertRecord): Promise<v
       record.last_raw_punch_id,
       record.unmatched_raw_punch_id,
       record.holiday_id ?? null,
-    ],
+      sessionRecordsJson,
+    ]
   );
 }
 
@@ -263,7 +318,7 @@ async function getRawPunchesForDate(date: string): Promise<RawPunchRow[]> {
      LEFT JOIN employees e ON e.biometric_id = p.biometric_id
      WHERE coalesce(p.ignored,false)=false AND (p.punch_time AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND ($1::date + INTERVAL '1 day')::date
      ORDER BY p.punch_time ASC, p.id ASC`,
-    [assertDate(date)],
+    [assertDate(date)]
   );
 
   return result.rows;
@@ -282,13 +337,13 @@ async function getRawPunchesForBiometricDate(biometricId: string, date: string):
      WHERE p.biometric_id = $1::bigint AND coalesce(p.ignored,false)=false
        AND (p.punch_time AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $2::date AND ($2::date + INTERVAL '1 day')::date
      ORDER BY p.punch_time ASC, p.id ASC`,
-    [biometricId, assertDate(date)],
+    [biometricId, assertDate(date)]
   );
 
   return result.rows;
 }
 
-async function getShiftAssignmentForDate(employeeId: string, date: string): Promise<ShiftAssignmentRow | null> {
+async function getShiftAssignmentForDate(employeeId: string, date: string): Promise<ShiftAssignmentWithSessions | null> {
   const result = await pool.query<ShiftAssignmentRow>(
     `SELECT
       esa.shift_id,
@@ -303,10 +358,38 @@ async function getShiftAssignmentForDate(employeeId: string, date: string): Prom
        AND (esa.effective_to IS NULL OR esa.effective_to >= $2::date)
      ORDER BY esa.effective_from DESC
      LIMIT 1`,
-    [employeeId, date],
+    [employeeId, date]
   );
 
-  return result.rows[0] ?? null;
+  const shift = result.rows[0];
+  if (!shift) return null;
+
+  const sessionsRes = await pool.query<ShiftSessionRow>(
+    `SELECT * FROM shift_sessions WHERE shift_id = $1 AND active = true ORDER BY session_number ASC`,
+    [shift.shift_id]
+  );
+
+  let sessions = sessionsRes.rows;
+  if (sessions.length === 0) {
+    sessions = [
+      {
+        id: shift.shift_id,
+        shift_id: shift.shift_id,
+        session_number: 1,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        grace_minutes: shift.grace_minutes,
+        minimum_work_minutes: shift.minimum_work_minutes,
+        early_exit_tolerance_minutes: shift.early_exit_tolerance_minutes,
+        checkin_before_minutes: shift.checkin_before_minutes,
+        checkout_after_minutes: shift.checkout_after_minutes,
+        crosses_midnight: shift.is_overnight,
+        active: true,
+      },
+    ];
+  }
+
+  return { ...shift, sessions };
 }
 
 async function deleteAttendanceExceptionsForRawPunchIds(rawPunchIds: number[]): Promise<void> {
@@ -315,31 +398,19 @@ async function deleteAttendanceExceptionsForRawPunchIds(rawPunchIds: number[]): 
   }
 }
 
-async function isValidPreviousOvernightPunch(employeeId: string, attendanceDate: string, punch: RawPunchRow): Promise<boolean> {
-  const previousDate = addDays(attendanceDate, -1);
-  const previousShift = await getShiftAssignmentForDate(employeeId, previousDate);
-  if (!previousShift || !isOvernightShift(previousShift.start_time, previousShift.end_time, previousShift.is_overnight)) {
-    return false;
-  }
-
-  const previousStart = toUtcFromIstDateTime(previousDate, previousShift.start_time);
-  const previousEnd = toUtcFromIstDateTime(attendanceDate, previousShift.end_time);
-  return punch.punch_time >= previousStart && punch.punch_time <= previousEnd;
-}
-
 async function syncOutOfShiftExceptions(
   employeeId: string,
   biometricId: number,
   attendanceDate: string,
-  shift: ShiftAssignmentRow,
+  shift: ShiftAssignmentWithSessions,
   localPunches: RawPunchRow[],
-  validPunches: RawPunchRow[],
+  validPunches: RawPunchRow[]
 ): Promise<void> {
   await deleteAttendanceExceptionsForRawPunchIds(validPunches.map((punch) => punch.id));
   const validPunchIds = new Set(validPunches.map((punch) => punch.id));
 
   for (const punch of localPunches) {
-    if (validPunchIds.has(punch.id) || await isValidPreviousOvernightPunch(employeeId, attendanceDate, punch)) {
+    if (validPunchIds.has(punch.id)) {
       continue;
     }
 
@@ -355,9 +426,301 @@ async function syncOutOfShiftExceptions(
         punch_time = EXCLUDED.punch_time,
         exception_type = EXCLUDED.exception_type,
         message = EXCLUDED.message`,
-      [punch.id, attendanceDate, employeeId, biometricId, shift.shift_id, punch.punch_time],
+      [punch.id, attendanceDate, employeeId, biometricId, shift.shift_id, punch.punch_time]
     );
   }
+}
+
+function evaluateMultiSessionAttendance(
+  attendanceDate: string,
+  shift: ShiftAssignmentWithSessions,
+  dateWindowPunches: RawPunchRow[]
+): {
+  sessionRecords: SessionRecord[];
+  allAssignedPunches: RawPunchRow[];
+  totalWorkingMinutes: number;
+  totalLateMinutes: number;
+  totalEarlyExitMinutes: number;
+  missingPunchCount: number;
+  firstPunchIn: Date | null;
+  lastPunchOut: Date | null;
+  overallStatus: AttendanceStatus;
+  note: string | null;
+} {
+  const sortedPunches = sortPunches(dateWindowPunches);
+  const now = attendanceNow();
+  const sessionRecords: SessionRecord[] = [];
+  const assignedPunchIds = new Set<number>();
+  const assignedPunchRows: RawPunchRow[] = [];
+
+  const sessionWindows = shift.sessions.map((s) => {
+    const sStart = toUtcFromIstDateTime(attendanceDate, s.start_time);
+    const sOvernight = s.crosses_midnight || isOvernightShift(s.start_time, s.end_time, s.crosses_midnight);
+    const sEndDate = sOvernight ? addDays(attendanceDate, 1) : attendanceDate;
+    const sEnd = toUtcFromIstDateTime(sEndDate, s.end_time);
+    const winStart = new Date(sStart.getTime() - (s.checkin_before_minutes ?? 0) * 60_000);
+    const winEnd = new Date(sEnd.getTime() + (s.checkout_after_minutes ?? 60) * 60_000);
+    const deadline = new Date(sEnd.getTime() + MISSING_PUNCH_BUFFER_MINUTES * 60_000);
+    const expectedMinutes = minutesBetween(sStart, sEnd);
+
+    return {
+      session: s,
+      sStart,
+      sEnd,
+      winStart,
+      winEnd,
+      deadline,
+      expectedMinutes,
+    };
+  });
+
+  const sessionAssignedPunchesMap = new Map<number, RawPunchRow[]>();
+  for (const sw of sessionWindows) {
+    sessionAssignedPunchesMap.set(sw.session.session_number, []);
+  }
+
+  for (const punch of sortedPunches) {
+    const matchingSessions = sessionWindows.filter(
+      (sw) => punch.punch_time >= sw.winStart && punch.punch_time <= sw.winEnd
+    );
+
+    if (matchingSessions.length === 0) {
+      continue;
+    }
+
+    let targetSw = matchingSessions[0]!;
+    if (matchingSessions.length > 1) {
+      targetSw = matchingSessions.reduce((closest, curr) => {
+        const distClosestStart = Math.abs(punch.punch_time.getTime() - closest.sStart.getTime());
+        const distClosestEnd = Math.abs(punch.punch_time.getTime() - closest.sEnd.getTime());
+        const minClosest = Math.min(distClosestStart, distClosestEnd);
+
+        const distCurrStart = Math.abs(punch.punch_time.getTime() - curr.sStart.getTime());
+        const distCurrEnd = Math.abs(punch.punch_time.getTime() - curr.sEnd.getTime());
+        const minCurr = Math.min(distCurrStart, distCurrEnd);
+
+        return minCurr < minClosest ? curr : closest;
+      });
+    }
+
+    if (!assignedPunchIds.has(punch.id)) {
+      assignedPunchIds.add(punch.id);
+      assignedPunchRows.push(punch);
+      sessionAssignedPunchesMap.get(targetSw.session.session_number)!.push(punch);
+    }
+  }
+
+  let totalWorkingMinutes = 0;
+  let totalLateMinutes = 0;
+  let totalEarlyExitMinutes = 0;
+  let missingPunchCount = 0;
+
+  for (const sw of sessionWindows) {
+    const s = sw.session;
+    const punches = sortPunches(sessionAssignedPunchesMap.get(s.session_number) ?? []);
+
+    let punchInAt: Date | null = null;
+    let punchInId: number | null = null;
+    let punchOutAt: Date | null = null;
+    let punchOutId: number | null = null;
+    let workedMinutes = 0;
+    let lateMinutes = 0;
+    let earlyExitMinutes = 0;
+    let missingPunch = false;
+    let status: SessionStatus = "NOT_STARTED";
+
+    if (punches.length === 0) {
+      if (now < sw.sStart) {
+        status = "NOT_STARTED";
+      } else if (now < sw.deadline) {
+        status = "CURRENTLY_CHECKED_IN";
+      } else {
+        status = "MISSING_IN";
+        missingPunch = true;
+      }
+    } else if (punches.length === 1) {
+      const p1 = punches[0]!;
+      const noRules = s.grace_minutes === 0 && s.minimum_work_minutes === 0 && s.early_exit_tolerance_minutes === 0;
+      if (now < sw.deadline) {
+        punchInAt = p1.punch_time;
+        punchInId = p1.id;
+        lateMinutes = noRules ? 0 : Math.max(0, minutesBetween(new Date(sw.sStart.getTime() + s.grace_minutes * 60_000), p1.punch_time));
+        status = "CURRENTLY_CHECKED_IN";
+      } else {
+        const distStart = Math.abs(p1.punch_time.getTime() - sw.sStart.getTime());
+        const distEnd = Math.abs(p1.punch_time.getTime() - sw.sEnd.getTime());
+
+        if (distStart <= distEnd) {
+          punchInAt = p1.punch_time;
+          punchInId = p1.id;
+          lateMinutes = noRules ? 0 : Math.max(0, minutesBetween(new Date(sw.sStart.getTime() + s.grace_minutes * 60_000), p1.punch_time));
+          missingPunch = true;
+          status = "MISSING_OUT";
+        } else {
+          punchOutAt = p1.punch_time;
+          punchOutId = p1.id;
+          earlyExitMinutes = noRules ? 0 : Math.max(
+            0,
+            minutesBetween(p1.punch_time, new Date(sw.sEnd.getTime() - s.early_exit_tolerance_minutes * 60_000))
+          );
+          missingPunch = true;
+          status = "MISSING_IN";
+        }
+      }
+    } else {
+      const first = punches[0]!;
+      const last = punches[punches.length - 1]!;
+
+      if (first.id === last.id) {
+        if (now < sw.deadline) {
+          punchInAt = first.punch_time;
+          punchInId = first.id;
+          lateMinutes = Math.max(0, minutesBetween(new Date(sw.sStart.getTime() + s.grace_minutes * 60_000), first.punch_time));
+          status = "CURRENTLY_CHECKED_IN";
+        } else {
+          punchInAt = first.punch_time;
+          punchInId = first.id;
+          lateMinutes = Math.max(0, minutesBetween(new Date(sw.sStart.getTime() + s.grace_minutes * 60_000), first.punch_time));
+          missingPunch = true;
+          status = "MISSING_OUT";
+        }
+      } else {
+        punchInAt = first.punch_time;
+        punchInId = first.id;
+        punchOutAt = last.punch_time;
+        punchOutId = last.id;
+
+        workedMinutes = minutesBetween(first.punch_time, last.punch_time);
+        lateMinutes = Math.max(0, minutesBetween(new Date(sw.sStart.getTime() + s.grace_minutes * 60_000), first.punch_time));
+        earlyExitMinutes = Math.max(
+          0,
+          minutesBetween(last.punch_time, new Date(sw.sEnd.getTime() - s.early_exit_tolerance_minutes * 60_000))
+        );
+
+        if (s.grace_minutes === 0 && s.minimum_work_minutes === 0 && s.early_exit_tolerance_minutes === 0) {
+          lateMinutes = 0;
+          earlyExitMinutes = 0;
+        } else {
+          lateMinutes = Math.max(0, minutesBetween(new Date(sw.sStart.getTime() + s.grace_minutes * 60_000), first.punch_time));
+          earlyExitMinutes = Math.max(
+            0,
+            minutesBetween(last.punch_time, new Date(sw.sEnd.getTime() - s.early_exit_tolerance_minutes * 60_000))
+          );
+        }
+
+        if (lateMinutes > 0 && earlyExitMinutes > 0) {
+          status = "LATE_AND_EARLY_EXIT";
+        } else if (lateMinutes > 0) {
+          status = "LATE";
+        } else if (earlyExitMinutes > 0) {
+          status = "EARLY_EXIT";
+        } else {
+          status = "COMPLETED";
+        }
+      }
+    }
+
+    if (missingPunch) {
+      missingPunchCount++;
+    }
+    totalWorkingMinutes += workedMinutes;
+    totalLateMinutes += lateMinutes;
+    totalEarlyExitMinutes += earlyExitMinutes;
+
+    sessionRecords.push({
+      session_id: s.id,
+      session_number: s.session_number,
+      session_name: `Session ${s.session_number}`,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      crosses_midnight: s.crosses_midnight,
+      grace_minutes: s.grace_minutes,
+      minimum_work_minutes: s.minimum_work_minutes,
+      early_exit_tolerance_minutes: s.early_exit_tolerance_minutes,
+      checkin_before_minutes: s.checkin_before_minutes,
+      checkout_after_minutes: s.checkout_after_minutes,
+      punch_in_id: punchInId,
+      punch_in_at: punchInAt ? punchInAt.toISOString() : null,
+      punch_out_id: punchOutId,
+      punch_out_at: punchOutAt ? punchOutAt.toISOString() : null,
+      worked_minutes: workedMinutes,
+      expected_minutes: sw.expectedMinutes,
+      late_minutes: lateMinutes,
+      early_exit_minutes: earlyExitMinutes,
+      missing_punch: missingPunch,
+      status,
+    });
+  }
+
+  let firstPunchIn: Date | null = null;
+  let lastPunchOut: Date | null = null;
+
+  for (const sr of sessionRecords) {
+    if (sr.punch_in_at) {
+      const d = new Date(sr.punch_in_at);
+      if (!firstPunchIn || d < firstPunchIn) firstPunchIn = d;
+    }
+    if (sr.punch_out_at) {
+      const d = new Date(sr.punch_out_at);
+      if (!lastPunchOut || d > lastPunchOut) lastPunchOut = d;
+    }
+  }
+
+  const totalMinWorkReq = shift.sessions.reduce((sum, s) => sum + (s.minimum_work_minutes ?? 0), 0);
+
+  let overallStatus: AttendanceStatus = "PRESENT";
+  let note: string | null = null;
+
+  const anyMissing = sessionRecords.some((sr) => sr.status === "MISSING_IN" || sr.status === "MISSING_OUT");
+  const anyCheckedIn = sessionRecords.some((sr) => sr.status === "CURRENTLY_CHECKED_IN");
+  const allNotStarted = sessionRecords.every((sr) => sr.status === "NOT_STARTED");
+
+  const firstSw = sessionWindows[0]!;
+
+  if (assignedPunchIds.size === 0) {
+    if (allNotStarted) {
+      overallStatus = "PENDING";
+      note = "Shift not started";
+    } else if (sessionRecords.every((sr) => sr.status === "MISSING_IN")) {
+      overallStatus = "ABSENT";
+      note = "No biometric attendance recorded";
+    } else {
+      overallStatus = "CHECK_IN_MISSING";
+      note = now < new Date(firstSw.sStart.getTime() + (firstSw.session.grace_minutes ?? 0) * 60_000)
+        ? "Awaiting check-in"
+        : "Check-in fingerprint missing";
+    }
+  } else if (anyMissing) {
+    overallStatus = "MISSING_PUNCH";
+    note = "Missing punch out";
+  } else if (anyCheckedIn) {
+    overallStatus = "CURRENTLY_CHECKED_IN";
+    note = totalLateMinutes ? `Late by ${totalLateMinutes} minutes; awaiting punch out` : "Awaiting punch out";
+  } else if (totalMinWorkReq > 0 && totalWorkingMinutes < totalMinWorkReq) {
+    overallStatus = "HALF_DAY";
+    note = "Below minimum working minutes";
+  } else if (totalLateMinutes > 0 && totalEarlyExitMinutes > 0) {
+    overallStatus = "LATE_AND_EARLY_EXIT";
+  } else if (totalLateMinutes > 0) {
+    overallStatus = "LATE";
+  } else if (totalEarlyExitMinutes > 0) {
+    overallStatus = "EARLY_EXIT";
+  } else {
+    overallStatus = "PRESENT";
+  }
+
+  return {
+    sessionRecords,
+    allAssignedPunches: assignedPunchRows,
+    totalWorkingMinutes,
+    totalLateMinutes,
+    totalEarlyExitMinutes,
+    missingPunchCount,
+    firstPunchIn,
+    lastPunchOut,
+    overallStatus,
+    note,
+  };
 }
 
 export async function rebuildAttendanceForDate(date: string): Promise<void> {
@@ -369,7 +732,6 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
     if (punch.biometric_id === null) {
       continue;
     }
-
     if (punch.employee_id) {
       punchesByEmployee.set(punch.employee_id, [...(punchesByEmployee.get(punch.employee_id) ?? []), punch]);
     }
@@ -381,7 +743,6 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
     if (!punch.employee_id || punch.biometric_id === null) {
       continue;
     }
-
     if (processedEmployees.has(punch.employee_id)) {
       continue;
     }
@@ -395,12 +756,10 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
       return shiftAttendanceDate === attendanceDate || shiftAttendanceDate === addDays(attendanceDate, 1);
     }));
 
-    const shiftId = shift?.shift_id ?? null;
-    if (!shift || !shiftId || !shift.start_time || !shift.end_time) {
+    if (!shift || !shift.shift_id) {
       if (localPunches.length === 0) {
         continue;
       }
-
       const first = localPunches[0]!;
       const last = localPunches[localPunches.length - 1]!;
       await upsertAttendanceRecord({
@@ -421,36 +780,42 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
       continue;
     }
 
-    const shiftStart = toUtcFromIstDateTime(attendanceDate, shift.start_time);
-    const overnight = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight);
-    const shiftEndDate = overnight ? addDays(attendanceDate, 1) : attendanceDate;
-    const shiftEnd = toUtcFromIstDateTime(shiftEndDate, shift.end_time);
-    const windowEnd = attendanceWindowEnd(shiftEnd, overnight, shift.checkout_after_minutes);
-    const windowStart = new Date(shiftStart.getTime() - shift.checkin_before_minutes * 60_000);
-    const punchesInWindow = sortPunches(dateWindowPunches.filter((entry) => entry.punch_time >= windowStart && entry.punch_time <= windowEnd));
+    const evalResult = evaluateMultiSessionAttendance(attendanceDate, shift, dateWindowPunches);
 
-    await syncOutOfShiftExceptions(punch.employee_id, Number(punch.biometric_id), attendanceDate, shift, localPunches, punchesInWindow);
+    await syncOutOfShiftExceptions(
+      punch.employee_id,
+      Number(punch.biometric_id),
+      attendanceDate,
+      shift,
+      localPunches,
+      evalResult.allAssignedPunches
+    );
 
-    if (punchesInWindow.length === 0) {
-      continue;
+    if (evalResult.allAssignedPunches.length === 0 && evalResult.overallStatus === "PENDING") {
+      // Keep pending record or sync status
     }
 
-    const first = punchesInWindow[0]!;
-    const last = punchesInWindow[punchesInWindow.length - 1]!;
+    const firstP = evalResult.allAssignedPunches[0];
+    const lastP = evalResult.allAssignedPunches[evalResult.allAssignedPunches.length - 1];
+
     await upsertAttendanceRecord({
       attendance_key: attendanceKeyForEmployee(punch.employee_id, attendanceDate),
       attendance_date: attendanceDate,
       employee_id: punch.employee_id,
       biometric_id: Number(punch.biometric_id),
-      shift_id: shiftId,
-      punch_in_at: first.punch_time,
-      punch_out_at: last.id === first.id ? null : last.punch_time,
-      working_minutes: last.id === first.id ? 0 : minutesBetween(first.punch_time, last.punch_time),
-      raw_punch_count: punchesInWindow.length,
-      ...attendanceStatusForPunches(first, last, shiftStart, shiftEnd, shift),
-      first_raw_punch_id: first.id,
-      last_raw_punch_id: last.id,
+      shift_id: shift.shift_id,
+      punch_in_at: evalResult.firstPunchIn,
+      punch_out_at: evalResult.lastPunchOut,
+      working_minutes: evalResult.totalWorkingMinutes,
+      late_minutes: evalResult.totalLateMinutes,
+      early_exit_minutes: evalResult.totalEarlyExitMinutes,
+      raw_punch_count: evalResult.allAssignedPunches.length,
+      status: evalResult.overallStatus,
+      note: evalResult.note,
+      first_raw_punch_id: firstP ? firstP.id : null,
+      last_raw_punch_id: lastP ? lastP.id : null,
       unmatched_raw_punch_id: null,
+      session_records: evalResult.sessionRecords,
     });
   }
 
@@ -458,7 +823,6 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
     if (punch.employee_id || punch.biometric_id === null) {
       continue;
     }
-
     const punchDate = toIstDateKey(punch.punch_time);
     if (punchDate !== attendanceDate) {
       continue;
@@ -496,7 +860,6 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
       if (punch.employee_id || punch.biometric_id === null || toIstDateKey(punch.punch_time) !== attendanceDate) {
         continue;
       }
-
       await upsertAttendanceRecord({
         attendance_key: attendanceKeyForUnmatched(punch.id),
         attendance_date: attendanceDate,
@@ -518,13 +881,9 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
 
   const shift = await getShiftAssignmentForDate(firstPunch.employee_id, attendanceDate);
   const localPunches = sortPunches(rawPunches.filter((entry) => toIstDateKey(entry.punch_time) === attendanceDate));
-  const shiftId = shift?.shift_id ?? null;
 
-  if (!shift || !shiftId || !shift.start_time || !shift.end_time) {
-    if (localPunches.length === 0) {
-      return;
-    }
-
+  if (!shift || !shift.shift_id) {
+    if (localPunches.length === 0) return;
     const first = localPunches[0]!;
     const last = localPunches[localPunches.length - 1]!;
     await upsertAttendanceRecord({
@@ -545,36 +904,38 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
     return;
   }
 
-  const shiftStart = toUtcFromIstDateTime(attendanceDate, shift.start_time);
-  const overnight = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight);
-  const shiftEndDate = overnight ? addDays(attendanceDate, 1) : attendanceDate;
-  const shiftEnd = toUtcFromIstDateTime(shiftEndDate, shift.end_time);
-  const windowEnd = attendanceWindowEnd(shiftEnd, overnight, shift.checkout_after_minutes);
-  const windowStart = new Date(shiftStart.getTime() - shift.checkin_before_minutes * 60_000);
-  const punchesInWindow = sortPunches(rawPunches.filter((entry) => entry.punch_time >= windowStart && entry.punch_time <= windowEnd));
+  const evalResult = evaluateMultiSessionAttendance(attendanceDate, shift, rawPunches);
 
-  await syncOutOfShiftExceptions(firstPunch.employee_id, Number(firstPunch.biometric_id), attendanceDate, shift, localPunches, punchesInWindow);
+  await syncOutOfShiftExceptions(
+    firstPunch.employee_id,
+    Number(firstPunch.biometric_id),
+    attendanceDate,
+    shift,
+    localPunches,
+    evalResult.allAssignedPunches
+  );
 
-  if (punchesInWindow.length === 0) {
-    return;
-  }
+  const firstP = evalResult.allAssignedPunches[0];
+  const lastP = evalResult.allAssignedPunches[evalResult.allAssignedPunches.length - 1];
 
-  const first = punchesInWindow[0]!;
-  const last = punchesInWindow[punchesInWindow.length - 1]!;
   await upsertAttendanceRecord({
     attendance_key: attendanceKeyForEmployee(firstPunch.employee_id, attendanceDate),
     attendance_date: attendanceDate,
     employee_id: firstPunch.employee_id,
     biometric_id: Number(firstPunch.biometric_id),
-    shift_id: shiftId,
-    punch_in_at: first.punch_time,
-    punch_out_at: last.id === first.id ? null : last.punch_time,
-    working_minutes: last.id === first.id ? 0 : minutesBetween(first.punch_time, last.punch_time),
-    raw_punch_count: punchesInWindow.length,
-    ...attendanceStatusForPunches(first, last, shiftStart, shiftEnd, shift),
-    first_raw_punch_id: first.id,
-    last_raw_punch_id: last.id,
+    shift_id: shift.shift_id,
+    punch_in_at: evalResult.firstPunchIn,
+    punch_out_at: evalResult.lastPunchOut,
+    working_minutes: evalResult.totalWorkingMinutes,
+    late_minutes: evalResult.totalLateMinutes,
+    early_exit_minutes: evalResult.totalEarlyExitMinutes,
+    raw_punch_count: evalResult.allAssignedPunches.length,
+    status: evalResult.overallStatus,
+    note: evalResult.note,
+    first_raw_punch_id: firstP ? firstP.id : null,
+    last_raw_punch_id: lastP ? lastP.id : null,
     unmatched_raw_punch_id: null,
+    session_records: evalResult.sessionRecords,
   });
 }
 
@@ -583,31 +944,73 @@ export async function rebuildAttendanceForAllActiveEmployees(date: string): Prom
   await rebuildAttendanceForDate(attendanceDate);
   const employees = await pool.query<{ id: string; biometric_id: number; joining_date: string }>(
     "SELECT id, biometric_id, joining_date::text FROM employees WHERE active = true AND joining_date <= $1::date",
-    [attendanceDate],
+    [attendanceDate]
   );
-  const holiday = await pool.query<{ id: string; name: string }>("SELECT id, name FROM holidays WHERE holiday_date = $1::date AND active = true", [attendanceDate]);
+  const holiday = await pool.query<{ id: string; name: string }>(
+    "SELECT id, name FROM holidays WHERE holiday_date = $1::date AND active = true",
+    [attendanceDate]
+  );
   const weekday = (new Date(`${attendanceDate}T00:00:00Z`).getUTCDay() + 6) % 7;
 
   for (const employee of employees.rows) {
     const shift = await getShiftAssignmentForDate(employee.id, attendanceDate);
     if (!shift) {
-      await upsertAttendanceRecord({ attendance_key: attendanceKeyForEmployee(employee.id, attendanceDate), attendance_date: attendanceDate, employee_id: employee.id, biometric_id: Number(employee.biometric_id), shift_id: null, punch_in_at: null, punch_out_at: null, working_minutes: 0, raw_punch_count: 0, status: "NO_SHIFT", first_raw_punch_id: null, last_raw_punch_id: null, unmatched_raw_punch_id: null, note: "No applicable shift" });
+      await upsertAttendanceRecord({
+        attendance_key: attendanceKeyForEmployee(employee.id, attendanceDate),
+        attendance_date: attendanceDate,
+        employee_id: employee.id,
+        biometric_id: Number(employee.biometric_id),
+        shift_id: null,
+        punch_in_at: null,
+        punch_out_at: null,
+        working_minutes: 0,
+        raw_punch_count: 0,
+        status: "NO_SHIFT",
+        first_raw_punch_id: null,
+        last_raw_punch_id: null,
+        unmatched_raw_punch_id: null,
+        note: "No applicable shift",
+      });
       continue;
     }
-    const existing = await pool.query("SELECT raw_punch_count FROM daily_attendance_records WHERE attendance_key = $1", [attendanceKeyForEmployee(employee.id, attendanceDate)]);
+
+    const existing = await pool.query(
+      "SELECT raw_punch_count FROM daily_attendance_records WHERE attendance_key = $1",
+      [attendanceKeyForEmployee(employee.id, attendanceDate)]
+    );
     if (Number(existing.rows[0]?.raw_punch_count ?? 0) > 0) continue;
-    const now = attendanceNow();
-    const overnight = isOvernightShift(shift.start_time, shift.end_time, shift.is_overnight);
-    const shiftStart = toUtcFromIstDateTime(attendanceDate, shift.start_time);
-    const shiftEnd = toUtcFromIstDateTime(overnight ? addDays(attendanceDate, 1) : attendanceDate, shift.end_time);
-    const deadline = new Date(shiftEnd.getTime() + MISSING_PUNCH_BUFFER_MINUTES * 60_000);
-    let status: AttendanceStatus; let note: string;
-    if (holiday.rows[0]) { status="HOLIDAY"; note=holiday.rows[0]!.name; }
-    else if (shift.weekly_off_days.includes(weekday)) { status="WEEKLY_OFF"; note="Weekly off"; }
-    else if (now < shiftStart) { status="PENDING"; note="Shift not started"; }
-    else if (now < deadline) { status="CHECK_IN_MISSING"; note=now < new Date(shiftStart.getTime()+shift.grace_minutes*60_000) ? "Awaiting check-in" : "Check-in fingerprint missing"; }
-    else { status="ABSENT"; note="No biometric attendance recorded"; }
-    await upsertAttendanceRecord({ attendance_key: attendanceKeyForEmployee(employee.id, attendanceDate), attendance_date: attendanceDate, employee_id: employee.id, biometric_id: Number(employee.biometric_id), shift_id: shift.shift_id, punch_in_at: null, punch_out_at: null, working_minutes: 0, raw_punch_count: 0, status, first_raw_punch_id: null, last_raw_punch_id: null, unmatched_raw_punch_id: null, holiday_id: status === "HOLIDAY" ? holiday.rows[0]!.id : null, note });
+
+    const evalResult = evaluateMultiSessionAttendance(attendanceDate, shift, []);
+
+    let status: AttendanceStatus = evalResult.overallStatus;
+    let note: string | null = evalResult.note;
+
+    if (holiday.rows[0]) {
+      status = "HOLIDAY";
+      note = holiday.rows[0]!.name;
+    } else if (shift.weekly_off_days.includes(weekday)) {
+      status = "WEEKLY_OFF";
+      note = "Weekly off";
+    }
+
+    await upsertAttendanceRecord({
+      attendance_key: attendanceKeyForEmployee(employee.id, attendanceDate),
+      attendance_date: attendanceDate,
+      employee_id: employee.id,
+      biometric_id: Number(employee.biometric_id),
+      shift_id: shift.shift_id,
+      punch_in_at: null,
+      punch_out_at: null,
+      working_minutes: 0,
+      raw_punch_count: 0,
+      status,
+      first_raw_punch_id: null,
+      last_raw_punch_id: null,
+      unmatched_raw_punch_id: null,
+      holiday_id: status === "HOLIDAY" ? holiday.rows[0]!.id : null,
+      note,
+      session_records: evalResult.sessionRecords,
+    });
   }
   return { processed: employees.rowCount ?? 0 };
 }
@@ -656,13 +1059,14 @@ export async function listAttendance(filters: AttendanceFilters): Promise<Attend
       a.status,
       a.first_raw_punch_id,
       a.last_raw_punch_id,
-      a.unmatched_raw_punch_id
+      a.unmatched_raw_punch_id,
+      a.session_records
      FROM daily_attendance_records a
      LEFT JOIN employees e ON e.id = a.employee_id
      LEFT JOIN shifts s ON s.id = a.shift_id
      WHERE ${clauses.join(" AND ")}
      ORDER BY a.status ASC, a.punch_in_at ASC NULLS LAST, a.biometric_id ASC, a.attendance_key ASC`,
-    params,
+    params
   );
 
   return result.rows;
@@ -686,7 +1090,7 @@ export async function listAttendanceExceptions(date: string): Promise<Attendance
      JOIN shifts s ON s.id = x.shift_id
      WHERE x.attendance_date = $1::date
      ORDER BY x.punch_time ASC, x.raw_punch_id ASC`,
-    [assertDate(date)],
+    [assertDate(date)]
   );
 
   return result.rows;
@@ -696,13 +1100,13 @@ export async function getAttendanceSummary(date: string): Promise<AttendanceDash
   const attendanceDate = assertDate(date);
   const result = await pool.query<AttendanceDashboardSummary>(
     `SELECT
-      COUNT(*) FILTER (WHERE status = 'PRESENT')::int AS "presentToday",
-      COUNT(*) FILTER (WHERE status = 'MISSING_PUNCH' AND punch_out_at IS NULL)::int AS "currentlyCheckedIn",
+      COUNT(*) FILTER (WHERE status IN ('PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT'))::int AS "presentToday",
+      COUNT(*) FILTER (WHERE status = 'CURRENTLY_CHECKED_IN')::int AS "currentlyCheckedIn",
       COUNT(*) FILTER (WHERE status = 'MISSING_PUNCH')::int AS "missingPunchOut",
       COUNT(*) FILTER (WHERE status = 'UNMATCHED')::int AS "unmatchedPunches"
      FROM daily_attendance_records
      WHERE attendance_date = $1::date`,
-    [attendanceDate],
+    [attendanceDate]
   );
 
   return result.rows[0] ?? { presentToday: 0, currentlyCheckedIn: 0, missingPunchOut: 0, unmatchedPunches: 0 };

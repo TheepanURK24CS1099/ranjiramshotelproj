@@ -44,7 +44,10 @@ describe("Safe record management", () => {
     await pool.query("DELETE FROM attendance_exceptions WHERE employee_id=$1", [employeeId]);
     await pool.query("DELETE FROM daily_attendance_records WHERE attendance_key LIKE $1 OR employee_id=$2", [`${marker}%`, employeeId]);
     await pool.query("DELETE FROM raw_attendance_punches WHERE source_event_key LIKE $1 OR biometric_id=$2", [`${marker}%`, bio]);
-    await pool.query("DELETE FROM employee_payroll_records WHERE employee_id=$1", [employeeId]);
+    await pool.query("UPDATE payroll_periods SET generated_by=NULL,approved_by=NULL,paid_by=NULL,locked_by=NULL WHERE year=$1", [year]);
+    await pool.query("DELETE FROM payroll_deductions WHERE payroll_record_id IN (SELECT id FROM employee_payroll_records WHERE payroll_period_id IN (SELECT id FROM payroll_periods WHERE year=$1))", [year]);
+    await pool.query("DELETE FROM employee_advance_transactions WHERE payroll_record_id IN (SELECT id FROM employee_payroll_records WHERE payroll_period_id IN (SELECT id FROM payroll_periods WHERE year=$1))", [year]);
+    await pool.query("DELETE FROM employee_payroll_records WHERE payroll_period_id IN (SELECT id FROM payroll_periods WHERE year=$1) OR employee_id=$2", [year, employeeId]);
     await pool.query("DELETE FROM payroll_periods WHERE year=$1", [year]);
     await pool.query("DELETE FROM employee_shift_assignments WHERE employee_id=$1 OR shift_id=$2", [employeeId, shiftId]);
     await pool.query("DELETE FROM employees WHERE id=$1", [employeeId]);
