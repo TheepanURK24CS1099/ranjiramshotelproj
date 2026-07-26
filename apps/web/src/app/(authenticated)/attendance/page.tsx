@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api-client";
-import { formatAttendanceDate, formatTimeOnly, formatWorkingMinutes } from "@/lib/format";
+import { formatAttendanceDate, formatAttendanceStatus, formatShiftTime, formatTimeOnly, formatWorkingMinutes } from "@/lib/format";
 import { ConfirmationModal } from "@/components/confirmation-modal";
 
 type AttendanceStatus = "PRESENT" | "CURRENTLY_CHECKED_IN" | "MISSING_PUNCH" | "UNMATCHED" | "NO_SHIFT" | "LATE" | "EARLY_EXIT" | "LATE_AND_EARLY_EXIT" | "HALF_DAY" | "ABSENT" | "PENDING" | "CHECK_IN_MISSING" | "WEEKLY_OFF" | "HOLIDAY";
@@ -590,14 +590,14 @@ export default function AttendancePage() {
                                 ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                                 : row.status === "CURRENTLY_CHECKED_IN"
                                   ? "bg-sky-50 text-sky-800 border-sky-300"
-                                  : row.status === "MISSING_PUNCH"
+                                  : row.status === "MISSING_PUNCH" || row.status === "CHECK_IN_MISSING"
                                     ? "bg-amber-50 text-amber-800 border-amber-300"
                                     : row.status === "NO_SHIFT"
                                       ? "bg-purple-50 text-purple-800 border-purple-300"
                                       : "bg-slate-100 text-slate-700 border-slate-200"
                             }`}
                           >
-                            {row.status.replaceAll("_", " ")}
+                            {formatAttendanceStatus(row.status)}
                           </span>
                         </td>
                       </tr>
@@ -613,13 +613,13 @@ export default function AttendancePage() {
                                 <div key={`sr-${sr.session_number}`} className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5 text-xs shadow-xs">
                                   <div className="flex items-center justify-between border-b border-slate-100 pb-1 font-semibold text-slate-800">
                                     <span>{sr.session_name}</span>
-                                    <span className="text-slate-500 font-mono">{sr.start_time} - {sr.end_time}</span>
+                                    <span className="text-slate-500 font-mono">{formatShiftTime(sr.start_time)} - {formatShiftTime(sr.end_time)}</span>
                                   </div>
                                   <div className="grid grid-cols-2 gap-1 text-slate-600">
                                     <div>In: <strong className="text-slate-900">{formatTimeOnly(sr.punch_in_at)}</strong></div>
                                     <div>Out: <strong className="text-slate-900">{formatTimeOnly(sr.punch_out_at)}</strong></div>
                                     <div>Work: <strong className="text-[#028174]">{formatWorkingMinutes(sr.worked_minutes)}</strong></div>
-                                    <div>Status: <span className="font-bold text-slate-700">{sr.status.replaceAll("_", " ")}</span></div>
+                                    <div>Status: <span className="font-bold text-slate-700">{formatAttendanceStatus(sr.status)}</span></div>
                                   </div>
                                   {(sr.late_minutes > 0 || sr.early_exit_minutes > 0 || sr.missing_punch) && (
                                     <div className="flex flex-wrap gap-1 pt-1 text-[11px]">
@@ -686,14 +686,14 @@ export default function AttendancePage() {
                           ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                           : row.status === "CURRENTLY_CHECKED_IN"
                             ? "bg-sky-50 text-sky-800 border-sky-300"
-                            : row.status === "MISSING_PUNCH"
+                            : row.status === "MISSING_PUNCH" || row.status === "CHECK_IN_MISSING"
                               ? "bg-amber-50 text-amber-800 border-amber-300"
                               : row.status === "NO_SHIFT"
                                 ? "bg-purple-50 text-purple-800 border-purple-300"
                                 : "bg-slate-100 text-slate-700 border-slate-200"
                       }`}
                     >
-                      {row.status.replaceAll("_", " ")}
+                      {formatAttendanceStatus(row.status)}
                     </span>
                   </div>
 
@@ -731,13 +731,13 @@ export default function AttendancePage() {
                         <div key={`m-sr-${sr.session_number}`} className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs space-y-1">
                           <div className="flex items-center justify-between font-bold text-slate-800">
                             <span>{sr.session_name}</span>
-                            <span className="text-slate-500 font-mono text-[11px]">{sr.start_time} - {sr.end_time}</span>
+                            <span className="text-slate-500 font-mono text-[11px]">{formatShiftTime(sr.start_time)} - {formatShiftTime(sr.end_time)}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-1 text-slate-600">
                             <div>In: <strong>{formatTimeOnly(sr.punch_in_at)}</strong></div>
                             <div>Out: <strong>{formatTimeOnly(sr.punch_out_at)}</strong></div>
                             <div>Work: <strong className="text-[#028174]">{formatWorkingMinutes(sr.worked_minutes)}</strong></div>
-                            <div>Status: <strong className="text-slate-800">{sr.status.replaceAll("_", " ")}</strong></div>
+                            <div>Status: <strong className="text-slate-800">{formatAttendanceStatus(sr.status)}</strong></div>
                           </div>
                         </div>
                       ))}

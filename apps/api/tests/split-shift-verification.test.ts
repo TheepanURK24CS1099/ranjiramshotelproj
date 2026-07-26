@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getDatabasePool } from "../src/infrastructure/database/database.js";
 import { createShift } from "../src/modules/shifts/shifts.service.js";
-import { rebuildAttendanceForBiometricDate, listAttendance } from "../src/modules/attendance/attendance.repository.js";
+import { rebuildAttendanceForBiometricDate, rebuildAttendanceForAllActiveEmployees, listAttendance } from "../src/modules/attendance/attendance.repository.js";
 import { attendance as getAttendanceReport } from "../src/modules/reports/reports.service.js";
 import { generate as generatePayroll, listRecords as listPayrollRecords } from "../src/modules/payroll/payroll.service.js";
 
@@ -331,4 +331,93 @@ describe("Split-Shift Final Verification Suite", () => {
     expect(Number(empPRecord.attendance_deduction)).toBeGreaterThan(0);
     expect(Number(empPRecord.net_pay)).toBeLessThan(30000);
   });
+
+  it("VERIFICATION 8: Session status derivation validation (Null checkIn cannot be CURRENTLY_CHECKED_IN)", async () => {
+    // 1. Session 17:00:00 - 22:40:00 split shift
+    const shift1722 = await createShift({
+      name: `Shift1722-${marker}`,
+      sessions: [
+        {
+          session_number: 1,
+          start_time: "17:00:00",
+          end_time: "22:40:00",
+          grace_minutes: 0,
+          minimum_work_minutes: 0,
+          early_exit_tolerance_minutes: 0,
+          checkin_before_minutes: 15,
+          checkout_after_minutes: 30,
+          crosses_midnight: false,
+          active: true,
+        },
+      ],
+    });
+
+    const bioIdSession = crypto.randomInt(90_000_000, 99_000_000);
+    const empSession = (
+      await pool.query(
+        `INSERT INTO employees (biometric_id, name, employee_code, active, joining_date)
+         VALUES ($1, $2, $3, true, '3026-07-01') RETURNING id`,
+        [bioIdSession, `EmpSession-${marker}`, `EMP-${bioIdSession}`]
+      )
+    ).rows[0].id;
+
+    await pool.query(
+      `INSERT INTO employee_shift_assignments (employee_id, shift_id, effective_from)
+       VALUES ($1, $2, '3026-07-01')`,
+      [empSession, shift1722.id]
+    );
+
+    // Case A: Null In + Null Out during active session (at 18:00) -> Status MUST BE CHECK_IN_MISSING, NOT CURRENTLY_CHECKED_IN
+    process.env.ATTENDANCE_TEST_NOW = istDateTime(attendanceDate, "18:00").toISOString();
+    await rebuildAttendanceForAllActiveEmployees(attendanceDate);
+    let records = await listAttendance({ date: attendanceDate, employeeId: empSession });
+    let s1 = records[0]?.session_records?.[0];
+    expect(s1?.start_time).toBe("17:00:00");
+    expect(s1?.end_time).toBe("22:40:00");
+    expect(s1?.punch_in_at).toBeNull();
+    expect(s1?.punch_out_at).toBeNull();
+    expect(s1?.status).toBe("CHECK_IN_MISSING");
+    expect(s1?.status).not.toBe("CURRENTLY_CHECKED_IN");
+    expect(records[0]?.status).toBe("CHECK_IN_MISSING");
+
+    // Case B: Valid In + Null Out during active session (at 18:00 with In at 17:00) -> CURRENTLY_CHECKED_IN
+    await pool.query(
+      `INSERT INTO raw_attendance_punches (biometric_id, punch_time, source_event_key)
+       VALUES ($1, $2, $3)`,
+      [bioIdSession, istDateTime(attendanceDate, "17:00"), `${marker}-sess-in`]
+    );
+    await rebuildAttendanceForBiometricDate(String(bioIdSession), attendanceDate);
+    records = await listAttendance({ date: attendanceDate, employeeId: empSession });
+    s1 = records[0]?.session_records?.[0];
+    expect(s1?.punch_in_at).not.toBeNull();
+    expect(s1?.punch_out_at).toBeNull();
+    expect(s1?.status).toBe("CURRENTLY_CHECKED_IN");
+
+    // Case C: Valid In + Null Out after checkout window (at 23:59) -> MISSING_OUT
+    process.env.ATTENDANCE_TEST_NOW = istDateTime(attendanceDate, "23:59").toISOString();
+    await rebuildAttendanceForBiometricDate(String(bioIdSession), attendanceDate);
+    records = await listAttendance({ date: attendanceDate, employeeId: empSession });
+    s1 = records[0]?.session_records?.[0];
+    expect(s1?.punch_in_at).not.toBeNull();
+    expect(s1?.punch_out_at).toBeNull();
+    expect(s1?.status).toBe("MISSING_OUT");
+
+    // Case D: Future session (at 12:00 PM before 17:00) -> NOT_STARTED
+    await pool.query("DELETE FROM raw_attendance_punches WHERE biometric_id = $1", [bioIdSession]);
+    await pool.query("DELETE FROM daily_attendance_records WHERE employee_id = $1", [empSession]);
+    process.env.ATTENDANCE_TEST_NOW = istDateTime(attendanceDate, "12:00").toISOString();
+    await rebuildAttendanceForAllActiveEmployees(attendanceDate);
+    records = await listAttendance({ date: attendanceDate, employeeId: empSession });
+    s1 = records[0]?.session_records?.[0];
+    expect(s1?.status).toBe("NOT_STARTED");
+
+    // Clean up temporary test data
+    await pool.query("DELETE FROM daily_attendance_records WHERE employee_id = $1", [empSession]);
+    await pool.query("DELETE FROM employee_shift_assignments WHERE employee_id = $1", [empSession]);
+    await pool.query("DELETE FROM raw_attendance_punches WHERE biometric_id = $1", [bioIdSession]);
+    await pool.query("DELETE FROM employees WHERE id = $1", [empSession]);
+    await pool.query("DELETE FROM shift_sessions WHERE shift_id = $1", [shift1722.id]);
+    await pool.query("DELETE FROM shifts WHERE id = $1", [shift1722.id]);
+  });
 });
+

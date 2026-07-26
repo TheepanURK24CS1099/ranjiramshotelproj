@@ -31,6 +31,7 @@ export type SessionStatus =
   | "CURRENTLY_CHECKED_IN"
   | "COMPLETED"
   | "MISSING_IN"
+  | "CHECK_IN_MISSING"
   | "MISSING_OUT"
   | "LATE"
   | "EARLY_EXIT"
@@ -532,10 +533,8 @@ function evaluateMultiSessionAttendance(
     if (punches.length === 0) {
       if (now < sw.sStart) {
         status = "NOT_STARTED";
-      } else if (now < sw.deadline) {
-        status = "CURRENTLY_CHECKED_IN";
       } else {
-        status = "MISSING_IN";
+        status = "CHECK_IN_MISSING";
         missingPunch = true;
       }
     } else if (punches.length === 1) {
@@ -671,17 +670,18 @@ function evaluateMultiSessionAttendance(
   let overallStatus: AttendanceStatus = "PRESENT";
   let note: string | null = null;
 
-  const anyMissing = sessionRecords.some((sr) => sr.status === "MISSING_IN" || sr.status === "MISSING_OUT");
+  const anyMissing = sessionRecords.some((sr) => sr.status === "MISSING_IN" || sr.status === "CHECK_IN_MISSING" || sr.status === "MISSING_OUT");
   const anyCheckedIn = sessionRecords.some((sr) => sr.status === "CURRENTLY_CHECKED_IN");
   const allNotStarted = sessionRecords.every((sr) => sr.status === "NOT_STARTED");
 
   const firstSw = sessionWindows[0]!;
+  const lastSw = sessionWindows[sessionWindows.length - 1]!;
 
   if (assignedPunchIds.size === 0) {
     if (allNotStarted) {
       overallStatus = "PENDING";
       note = "Shift not started";
-    } else if (sessionRecords.every((sr) => sr.status === "MISSING_IN")) {
+    } else if (now >= lastSw.deadline && sessionRecords.every((sr) => sr.status === "MISSING_IN" || sr.status === "CHECK_IN_MISSING")) {
       overallStatus = "ABSENT";
       note = "No biometric attendance recorded";
     } else {
