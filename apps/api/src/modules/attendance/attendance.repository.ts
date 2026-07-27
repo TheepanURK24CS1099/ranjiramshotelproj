@@ -511,6 +511,40 @@ function evaluateMultiSessionAttendance(
     }
   }
 
+  if (sortedPunches.length === 0) {
+    const firstSw = sessionWindows[0]!;
+    const lastSw = sessionWindows[sessionWindows.length - 1]!;
+    let overallStatus: AttendanceStatus = "PRESENT";
+    let note: string | null = null;
+
+    if (now < firstSw.sStart) {
+      overallStatus = "PENDING";
+      note = "Shift not started";
+    } else if (now >= lastSw.deadline) {
+      overallStatus = "ABSENT";
+      note = "No biometric attendance recorded";
+    } else {
+      overallStatus = "CHECK_IN_MISSING";
+      note =
+        now < new Date(firstSw.sStart.getTime() + (firstSw.session.grace_minutes ?? 0) * 60_000)
+          ? "Awaiting check-in"
+          : "Check-in fingerprint missing";
+    }
+
+    return {
+      sessionRecords: [],
+      allAssignedPunches: [],
+      totalWorkingMinutes: 0,
+      totalLateMinutes: 0,
+      totalEarlyExitMinutes: 0,
+      missingPunchCount: 0,
+      firstPunchIn: null,
+      lastPunchOut: null,
+      overallStatus,
+      note,
+    };
+  }
+
   let totalWorkingMinutes = 0;
   let totalLateMinutes = 0;
   let totalEarlyExitMinutes = 0;

@@ -367,18 +367,12 @@ describe("Split-Shift Final Verification Suite", () => {
       [empSession, shift1722.id]
     );
 
-    // Case A: Null In + Null Out during active session (at 18:00) -> Status MUST BE CHECK_IN_MISSING, NOT CURRENTLY_CHECKED_IN
+    // Case A: Null In + Null Out during active session (at 18:00) -> Daily status MUST BE CHECK_IN_MISSING, session_records = []
     process.env.ATTENDANCE_TEST_NOW = istDateTime(attendanceDate, "18:00").toISOString();
     await rebuildAttendanceForAllActiveEmployees(attendanceDate);
     let records = await listAttendance({ date: attendanceDate, employeeId: empSession });
-    let s1 = records[0]?.session_records?.[0];
-    expect(s1?.start_time).toBe("17:00:00");
-    expect(s1?.end_time).toBe("22:40:00");
-    expect(s1?.punch_in_at).toBeNull();
-    expect(s1?.punch_out_at).toBeNull();
-    expect(s1?.status).toBe("CHECK_IN_MISSING");
-    expect(s1?.status).not.toBe("CURRENTLY_CHECKED_IN");
     expect(records[0]?.status).toBe("CHECK_IN_MISSING");
+    expect(records[0]?.session_records).toEqual([]);
 
     // Case B: Valid In + Null Out during active session (at 18:00 with In at 17:00) -> CURRENTLY_CHECKED_IN
     await pool.query(
@@ -388,7 +382,7 @@ describe("Split-Shift Final Verification Suite", () => {
     );
     await rebuildAttendanceForBiometricDate(String(bioIdSession), attendanceDate);
     records = await listAttendance({ date: attendanceDate, employeeId: empSession });
-    s1 = records[0]?.session_records?.[0];
+    let s1 = records[0]?.session_records?.[0];
     expect(s1?.punch_in_at).not.toBeNull();
     expect(s1?.punch_out_at).toBeNull();
     expect(s1?.status).toBe("CURRENTLY_CHECKED_IN");
@@ -402,14 +396,14 @@ describe("Split-Shift Final Verification Suite", () => {
     expect(s1?.punch_out_at).toBeNull();
     expect(s1?.status).toBe("MISSING_OUT");
 
-    // Case D: Future session (at 12:00 PM before 17:00) -> NOT_STARTED
+    // Case D: Future session (at 12:00 PM before 17:00) -> Daily status PENDING, session_records = []
     await pool.query("DELETE FROM raw_attendance_punches WHERE biometric_id = $1", [bioIdSession]);
     await pool.query("DELETE FROM daily_attendance_records WHERE employee_id = $1", [empSession]);
     process.env.ATTENDANCE_TEST_NOW = istDateTime(attendanceDate, "12:00").toISOString();
     await rebuildAttendanceForAllActiveEmployees(attendanceDate);
     records = await listAttendance({ date: attendanceDate, employeeId: empSession });
-    s1 = records[0]?.session_records?.[0];
-    expect(s1?.status).toBe("NOT_STARTED");
+    expect(records[0]?.status).toBe("PENDING");
+    expect(records[0]?.session_records).toEqual([]);
 
     // Clean up temporary test data
     await pool.query("DELETE FROM daily_attendance_records WHERE employee_id = $1", [empSession]);
