@@ -549,8 +549,10 @@ function evaluateMultiSessionAttendance(
   let totalLateMinutes = 0;
   let totalEarlyExitMinutes = 0;
   let missingPunchCount = 0;
+  let hasOutOfShiftCheckout = false;
 
-  for (const sw of sessionWindows) {
+  for (let i = 0; i < sessionWindows.length; i++) {
+    const sw = sessionWindows[i]!;
     const s = sw.session;
     const punches = sortPunches(sessionAssignedPunchesMap.get(s.session_number) ?? []);
 
@@ -640,6 +642,36 @@ function evaluateMultiSessionAttendance(
             minutesBetween(last.punch_time, new Date(sw.sEnd.getTime() - s.early_exit_tolerance_minutes * 60_000))
           );
         }
+
+        if (lateMinutes > 0 && earlyExitMinutes > 0) {
+          status = "LATE_AND_EARLY_EXIT";
+        } else if (lateMinutes > 0) {
+          status = "LATE";
+        } else if (earlyExitMinutes > 0) {
+          status = "EARLY_EXIT";
+        } else {
+          status = "COMPLETED";
+        }
+      }
+    }
+
+    if (punchInAt !== null && punchOutAt === null && now >= sw.deadline && status === "MISSING_OUT") {
+      const nextSw = sessionWindows[i + 1];
+      const suitableLaterPunches = sortedPunches.filter(
+        (p) => !assignedPunchIds.has(p.id) && p.punch_time > punchInAt! && (!nextSw || p.punch_time < nextSw.winStart)
+      );
+
+      if (suitableLaterPunches.length === 1) {
+        const reusedPunch = suitableLaterPunches[0]!;
+        punchOutAt = reusedPunch.punch_time;
+        punchOutId = reusedPunch.id;
+        workedMinutes = minutesBetween(punchInAt, reusedPunch.punch_time);
+        earlyExitMinutes = Math.max(
+          0,
+          minutesBetween(reusedPunch.punch_time, new Date(sw.sEnd.getTime() - s.early_exit_tolerance_minutes * 60_000))
+        );
+        missingPunch = false;
+        hasOutOfShiftCheckout = true;
 
         if (lateMinutes > 0 && earlyExitMinutes > 0) {
           status = "LATE_AND_EARLY_EXIT";
@@ -743,6 +775,10 @@ function evaluateMultiSessionAttendance(
     overallStatus = "PRESENT";
   }
 
+  if (hasOutOfShiftCheckout && !anyMissing && !anyCheckedIn) {
+    note = "Checkout outside shift window";
+  }
+
   return {
     sessionRecords,
     allAssignedPunches: assignedPunchRows,
@@ -829,8 +865,15 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
       // Keep pending record or sync status
     }
 
+    const sessionPunchIds = (evalResult.sessionRecords ?? [])
+      .flatMap((sr) => [sr.punch_in_id, sr.punch_out_id])
+      .filter((id): id is number => id !== null);
+
     const firstP = evalResult.allAssignedPunches[0];
     const lastP = evalResult.allAssignedPunches[evalResult.allAssignedPunches.length - 1];
+    const firstRawPunchId = sessionPunchIds[0] ?? (firstP ? firstP.id : null);
+    const lastRawPunchId = sessionPunchIds.length > 0 ? sessionPunchIds[sessionPunchIds.length - 1]! : (lastP ? lastP.id : null);
+    const rawPunchCount = Math.max(evalResult.allAssignedPunches.length, new Set(sessionPunchIds).size);
 
     await upsertAttendanceRecord({
       attendance_key: attendanceKeyForEmployee(punch.employee_id, attendanceDate),
@@ -843,11 +886,11 @@ export async function rebuildAttendanceForDate(date: string): Promise<void> {
       working_minutes: evalResult.totalWorkingMinutes,
       late_minutes: evalResult.totalLateMinutes,
       early_exit_minutes: evalResult.totalEarlyExitMinutes,
-      raw_punch_count: evalResult.allAssignedPunches.length,
+      raw_punch_count: rawPunchCount,
       status: evalResult.overallStatus,
       note: evalResult.note,
-      first_raw_punch_id: firstP ? firstP.id : null,
-      last_raw_punch_id: lastP ? lastP.id : null,
+      first_raw_punch_id: firstRawPunchId,
+      last_raw_punch_id: lastRawPunchId,
       unmatched_raw_punch_id: null,
       session_records: evalResult.sessionRecords,
     });
@@ -949,8 +992,15 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
     evalResult.allAssignedPunches
   );
 
+  const sessionPunchIds = (evalResult.sessionRecords ?? [])
+    .flatMap((sr) => [sr.punch_in_id, sr.punch_out_id])
+    .filter((id): id is number => id !== null);
+
   const firstP = evalResult.allAssignedPunches[0];
   const lastP = evalResult.allAssignedPunches[evalResult.allAssignedPunches.length - 1];
+  const firstRawPunchId = sessionPunchIds[0] ?? (firstP ? firstP.id : null);
+  const lastRawPunchId = sessionPunchIds.length > 0 ? sessionPunchIds[sessionPunchIds.length - 1]! : (lastP ? lastP.id : null);
+  const rawPunchCount = Math.max(evalResult.allAssignedPunches.length, new Set(sessionPunchIds).size);
 
   await upsertAttendanceRecord({
     attendance_key: attendanceKeyForEmployee(firstPunch.employee_id, attendanceDate),
@@ -963,11 +1013,11 @@ export async function rebuildAttendanceForBiometricDate(biometricId: string, dat
     working_minutes: evalResult.totalWorkingMinutes,
     late_minutes: evalResult.totalLateMinutes,
     early_exit_minutes: evalResult.totalEarlyExitMinutes,
-    raw_punch_count: evalResult.allAssignedPunches.length,
+    raw_punch_count: rawPunchCount,
     status: evalResult.overallStatus,
     note: evalResult.note,
-    first_raw_punch_id: firstP ? firstP.id : null,
-    last_raw_punch_id: lastP ? lastP.id : null,
+    first_raw_punch_id: firstRawPunchId,
+    last_raw_punch_id: lastRawPunchId,
     unmatched_raw_punch_id: null,
     session_records: evalResult.sessionRecords,
   });
