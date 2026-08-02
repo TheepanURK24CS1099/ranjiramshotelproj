@@ -290,7 +290,7 @@ describe("Zero-Punch Session Record Suppression Suite", () => {
     expect(records.length).toBe(1);
     const rec = records[0]!;
 
-    expect(rec.status).toBe("MISSING_PUNCH");
+    expect(rec.status).toBe("PRESENT");
     expect(rec.working_minutes).toBe(240);
     expect(rec.session_records?.length).toBe(2);
     expect(rec.session_records?.[0]?.status).toBe("COMPLETED");

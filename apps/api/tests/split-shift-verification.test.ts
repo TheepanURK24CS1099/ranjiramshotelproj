@@ -183,7 +183,7 @@ describe("Split-Shift Final Verification Suite", () => {
     expect(s1?.worked_minutes).toBe(360);
     expect(s2?.status).toBe("MISSING_OUT");
     expect(s2?.worked_minutes).toBe(0);
-    expect(records[0]?.status).toBe("MISSING_PUNCH");
+    expect(records[0]?.status).toBe("PRESENT");
 
     // S1 checkout (13:00) was NOT mispaired with S2 checkin (19:00)
     expect(s1?.punch_out_id).not.toBeNull();

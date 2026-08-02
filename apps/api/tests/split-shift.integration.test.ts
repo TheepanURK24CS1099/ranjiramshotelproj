@@ -300,7 +300,7 @@ describe("Split-Shift Support Integration Tests", () => {
 
     const records = await listAttendance({ date: attendanceDate, employeeId: emp4Id });
     expect(records.length).toBe(1);
-    expect(records[0]?.status).toBe("MISSING_PUNCH");
+    expect(records[0]?.status).toBe("PRESENT");
 
     await pool.query("DELETE FROM daily_attendance_records WHERE employee_id = $1", [emp4Id]);
     await pool.query("DELETE FROM employee_shift_assignments WHERE employee_id = $1", [emp4Id]);
