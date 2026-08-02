@@ -745,6 +745,13 @@ function evaluateMultiSessionAttendance(
   let overallStatus: AttendanceStatus = "PRESENT";
   let note: string | null = null;
 
+  const completedSessions = sessionRecords.filter(
+    (sr) =>
+      sr.status === "COMPLETED" ||
+      sr.status === "LATE" ||
+      sr.status === "EARLY_EXIT" ||
+      sr.status === "LATE_AND_EARLY_EXIT"
+  );
   const anyMissing = sessionRecords.some((sr) => sr.status === "MISSING_IN" || sr.status === "CHECK_IN_MISSING" || sr.status === "MISSING_OUT");
   const anyCheckedIn = sessionRecords.some((sr) => sr.status === "CURRENTLY_CHECKED_IN");
   const allNotStarted = sessionRecords.every((sr) => sr.status === "NOT_STARTED");
@@ -752,7 +759,27 @@ function evaluateMultiSessionAttendance(
   const firstSw = sessionWindows[0]!;
   const lastSw = sessionWindows[sessionWindows.length - 1]!;
 
-  if (assignedPunchIds.size === 0) {
+  if (anyCheckedIn) {
+    overallStatus = "CURRENTLY_CHECKED_IN";
+    note = totalLateMinutes ? `Late by ${totalLateMinutes} minutes; awaiting punch out` : "Awaiting punch out";
+  } else if (completedSessions.length > 0) {
+    if (!anyMissing && totalMinWorkReq > 0 && totalWorkingMinutes < totalMinWorkReq) {
+      overallStatus = "HALF_DAY";
+      note = "Below minimum working minutes";
+    } else if (totalLateMinutes > 0 && totalEarlyExitMinutes > 0) {
+      overallStatus = "LATE_AND_EARLY_EXIT";
+    } else if (totalLateMinutes > 0) {
+      overallStatus = "LATE";
+    } else if (totalEarlyExitMinutes > 0) {
+      overallStatus = "EARLY_EXIT";
+    } else {
+      overallStatus = "PRESENT";
+    }
+
+    if (hasOutOfShiftCheckout) {
+      note = "Checkout outside shift window";
+    }
+  } else if (assignedPunchIds.size === 0) {
     if (allNotStarted) {
       overallStatus = "PENDING";
       note = "Shift not started";
@@ -768,9 +795,6 @@ function evaluateMultiSessionAttendance(
   } else if (anyMissing) {
     overallStatus = "MISSING_PUNCH";
     note = "Missing punch out";
-  } else if (anyCheckedIn) {
-    overallStatus = "CURRENTLY_CHECKED_IN";
-    note = totalLateMinutes ? `Late by ${totalLateMinutes} minutes; awaiting punch out` : "Awaiting punch out";
   } else if (totalMinWorkReq > 0 && totalWorkingMinutes < totalMinWorkReq) {
     overallStatus = "HALF_DAY";
     note = "Below minimum working minutes";
@@ -784,7 +808,7 @@ function evaluateMultiSessionAttendance(
     overallStatus = "PRESENT";
   }
 
-  if (hasOutOfShiftCheckout && !anyMissing && !anyCheckedIn) {
+  if (hasOutOfShiftCheckout && !anyCheckedIn) {
     note = "Checkout outside shift window";
   }
 

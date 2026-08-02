@@ -268,8 +268,7 @@ describe("Out-of-Shift Auto-Complete Checkout Integration Tests", () => {
       )
     ).rows[0];
 
-    expect(record.status).toBe("MISSING_PUNCH");
-    expect(record.note).toBe("Missing punch out");
+    expect(record.status).toBe("PRESENT");
 
     const sessions = record.session_records;
     expect(sessions[0].status).toBe("COMPLETED");
