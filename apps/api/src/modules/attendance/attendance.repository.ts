@@ -472,6 +472,7 @@ function evaluateMultiSessionAttendance(
       winEnd,
       deadline,
       expectedMinutes,
+      sOvernight,
     };
   });
 
@@ -657,9 +658,17 @@ function evaluateMultiSessionAttendance(
 
     if (punchInAt !== null && punchOutAt === null && now >= sw.deadline && status === "MISSING_OUT") {
       const nextSw = sessionWindows[i + 1];
-      const suitableLaterPunches = sortedPunches.filter(
-        (p) => !assignedPunchIds.has(p.id) && p.punch_time > punchInAt! && (!nextSw || p.punch_time < nextSw.winStart)
-      );
+      const suitableLaterPunches = sortedPunches.filter((p) => {
+        if (assignedPunchIds.has(p.id)) return false;
+        if (p.punch_time <= punchInAt!) return false;
+        if (nextSw && p.punch_time >= nextSw.winStart) return false;
+
+        const punchDate = toIstDateKey(p.punch_time);
+        if (sw.sOvernight) {
+          return punchDate === attendanceDate || punchDate === addDays(attendanceDate, 1);
+        }
+        return punchDate === attendanceDate;
+      });
 
       if (suitableLaterPunches.length === 1) {
         const reusedPunch = suitableLaterPunches[0]!;

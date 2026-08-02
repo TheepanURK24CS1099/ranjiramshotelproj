@@ -18,6 +18,7 @@ const biometricIds = {
   overnightOutside: biometricIdBase + 4,
   splitShift: biometricIdBase + 5,
   noCheckout: biometricIdBase + 6,
+  dhanabal: biometricIdBase + 7,
 };
 
 let shiftIdNormal = "";
@@ -109,6 +110,7 @@ describe("Out-of-Shift Auto-Complete Checkout Integration Tests", () => {
     await createEmployee(biometricIds.overnightOutside, `${marker}-overnight-outside`, shiftIdOvernight);
     await createEmployee(biometricIds.splitShift, `${marker}-split-outside`, shiftIdSplit);
     await createEmployee(biometricIds.noCheckout, `${marker}-no-checkout`, shiftIdNormal);
+    await createEmployee(biometricIds.dhanabal, `${marker}-dhanabal`, shiftIdSplit);
 
     // 3. Insert punches
     // Case 1: valid IN + OUT inside shift (06:01 AM, 01:55 PM)
@@ -118,6 +120,7 @@ describe("Out-of-Shift Auto-Complete Checkout Integration Tests", () => {
     // Case 2: valid IN + OUT outside shift (06:01 AM, 04:00 PM) - 04:00 PM is past window end (03:00 PM)
     await insertRawPunch(biometricIds.inOutOutside, istDateTime(attendanceDate, "06:01:00"));
     await insertRawPunch(biometricIds.inOutOutside, istDateTime(attendanceDate, "16:00:00"));
+    await insertRawPunch(biometricIds.inOutOutside, istDateTime(nextDate, "06:00:00"));
 
     // Case 3: multiple outside punches (06:01 AM, 04:00 PM, 05:00 PM)
     await insertRawPunch(biometricIds.multipleOutside, istDateTime(attendanceDate, "06:01:00"));
@@ -136,6 +139,12 @@ describe("Out-of-Shift Auto-Complete Checkout Integration Tests", () => {
 
     // Case 6: no checkout (06:01 AM only)
     await insertRawPunch(biometricIds.noCheckout, istDateTime(attendanceDate, "06:01:00"));
+
+    // Case 7: DHANABAL split shift with Session 1 completed, Session 2 IN (01:57 PM), and next day IN (06:25 AM)
+    await insertRawPunch(biometricIds.dhanabal, istDateTime(attendanceDate, "08:05:00"));
+    await insertRawPunch(biometricIds.dhanabal, istDateTime(attendanceDate, "12:00:00"));
+    await insertRawPunch(biometricIds.dhanabal, istDateTime(attendanceDate, "16:15:00"));
+    await insertRawPunch(biometricIds.dhanabal, istDateTime(nextDate, "06:25:00"));
 
     // Rebuild attendance for test date
     await rebuildAttendanceForDate(attendanceDate);
@@ -249,6 +258,25 @@ describe("Out-of-Shift Auto-Complete Checkout Integration Tests", () => {
     expect(record.status).toBe("MISSING_PUNCH");
     expect(record.working_minutes).toBe(0);
     expect(record.note).toBe("Missing punch out");
+  });
+
+  it("verifies DHANABAL scenario: Session 1 completed, Session 2 missing punch, does not use next-day punch", async () => {
+    const record = (
+      await pool.query(
+        "SELECT status, working_minutes, note, session_records FROM daily_attendance_records WHERE attendance_date = $1::date AND biometric_id = $2",
+        [attendanceDate, biometricIds.dhanabal]
+      )
+    ).rows[0];
+
+    expect(record.status).toBe("MISSING_PUNCH");
+    expect(record.note).toBe("Missing punch out");
+
+    const sessions = record.session_records;
+    expect(sessions[0].status).toBe("COMPLETED");
+    expect(sessions[0].missing_punch).toBe(false);
+    expect(sessions[1].status).toBe("MISSING_OUT");
+    expect(sessions[1].missing_punch).toBe(true);
+    expect(sessions[1].punch_out_at).toBeNull();
   });
 
   it("leaves payroll calculation unaffected and operational", async () => {
