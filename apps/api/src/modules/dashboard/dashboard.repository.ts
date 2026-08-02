@@ -36,7 +36,7 @@ export async function getDashboardSummary() {
     ),
     attendance_counts AS (
       SELECT
-        COUNT(*) FILTER (WHERE status = 'PRESENT') as present_today,
+        COUNT(*) FILTER (WHERE status IN ('PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT')) as present_today,
         COUNT(*) FILTER (WHERE status = 'CURRENTLY_CHECKED_IN') as currently_checked_in,
         COUNT(*) FILTER (WHERE status = 'MISSING_PUNCH') as missing_punch_out,
         COUNT(*) FILTER (WHERE status = 'UNMATCHED') as unmatched_punches

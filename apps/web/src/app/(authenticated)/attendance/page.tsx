@@ -146,7 +146,14 @@ export default function AttendancePage() {
     let earlyExitCount = 0;
 
     for (const row of rows) {
-      if (row.status === "PRESENT") presentCount++;
+      if (
+        row.status === "PRESENT" ||
+        row.status === "LATE" ||
+        row.status === "EARLY_EXIT" ||
+        row.status === "LATE_AND_EARLY_EXIT"
+      ) {
+        presentCount++;
+      }
       if (row.status === "CURRENTLY_CHECKED_IN") checkedInCount++;
       if (row.status === "MISSING_PUNCH") missingPunchCount++;
       if (row.late_minutes > 0) lateCount++;
