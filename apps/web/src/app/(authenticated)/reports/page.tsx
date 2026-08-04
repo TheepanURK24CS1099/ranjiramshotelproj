@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { config } from "@/lib/config";
+import { formatWorkingMinutes } from "@/lib/format";
 
 const reports = [
   ["attendance-summary", "Attendance"],
@@ -188,6 +189,35 @@ function UnmatchedDetail({ count }: { count: number }) {
   );
 }
 
+const ATTENDANCE_SUMMARY_COLUMNS = [
+  "employee",
+  "employee_code",
+  "biometric_id",
+  "shift",
+  "active_status",
+  "total_working_days",
+  "present_days",
+  "absent_days",
+  "late_days",
+  "overtime",
+  "view_report",
+];
+
+function getColumnHeader(c: string): string {
+  if (c === "employee") return "Employee";
+  if (c === "employee_code") return "Employee ID";
+  if (c === "biometric_id") return "Biometric ID";
+  if (c === "shift") return "Shift";
+  if (c === "active_status") return "Active Status";
+  if (c === "total_working_days") return "Total Days";
+  if (c === "present_days") return "Present Days";
+  if (c === "absent_days") return "Absent Days";
+  if (c === "late_days") return "Late Days";
+  if (c === "overtime") return "Overtime";
+  if (c === "view_report") return "View Report";
+  return c.replaceAll("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
 function renderCell(c: string, row: Record<string, unknown>) {
   const val = row[c];
   if (c === "view_report") {
@@ -200,6 +230,18 @@ function renderCell(c: string, row: Record<string, unknown>) {
         View Report
       </a>
     );
+  }
+
+  if (c === "overtime") {
+    const minutes =
+      typeof row.overtime_minutes === "number"
+        ? row.overtime_minutes
+        : row.overtime_minutes !== undefined && row.overtime_minutes !== null
+        ? Number(row.overtime_minutes) || 0
+        : row.overtime_hours !== undefined && row.overtime_hours !== null
+        ? Math.round((Number(row.overtime_hours) || 0) * 60)
+        : 0;
+    return formatWorkingMinutes(minutes);
   }
 
   if (val === null || val === undefined) return <span className="text-slate-400">—</span>;
@@ -300,7 +342,10 @@ export default function ReportsPage() {
   };
 
   const items: Record<string, unknown>[] = data?.items ?? [];
-  const columns = Object.keys(items[0] ?? {}).filter((c) => c !== "employee_id");
+  const columns =
+    selected === "attendance-summary"
+      ? ATTENDANCE_SUMMARY_COLUMNS
+      : Object.keys(items[0] ?? {}).filter((c) => c !== "employee_id");
   const summary: Record<string, unknown> = data?.summary ?? {};
 
   return (
@@ -459,7 +504,7 @@ export default function ReportsPage() {
                   <tr className="border-b border-slate-200/80 bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     {columns.map((c) => (
                       <th className="px-5 py-4 whitespace-nowrap" key={c}>
-                        {c === "employee_code" ? "Employee ID" : c.replaceAll("_", " ")}
+                        {getColumnHeader(c)}
                       </th>
                     ))}
                   </tr>
