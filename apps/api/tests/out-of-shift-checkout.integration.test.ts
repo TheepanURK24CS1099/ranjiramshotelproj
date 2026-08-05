@@ -208,7 +208,7 @@ describe("Out-of-Shift Auto-Complete Checkout Integration Tests", () => {
       )
     ).rows[0];
 
-    expect(record.status).toBe("MISSING_PUNCH");
+    expect(record.status).toBe("PRESENT");
     expect(record.working_minutes).toBe(0);
     expect(record.note).toBe("Missing punch out");
   });
@@ -255,7 +255,7 @@ describe("Out-of-Shift Auto-Complete Checkout Integration Tests", () => {
       )
     ).rows[0];
 
-    expect(record.status).toBe("MISSING_PUNCH");
+    expect(record.status).toBe("PRESENT");
     expect(record.working_minutes).toBe(0);
     expect(record.note).toBe("Missing punch out");
   });

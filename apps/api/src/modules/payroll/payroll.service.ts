@@ -24,7 +24,7 @@ async function recalcRecord(p:{id:string;period_start:string;period_end:string;s
  const joined=employee.joining_date&&employee.joining_date>p.period_start?employee.joining_date:p.period_start;
  const calendar=Math.floor((Date.parse(`${p.period_end}T00:00:00Z`)-Date.parse(`${joined}T00:00:00Z`))/86400000)+1;
  const present=(counts.PRESENT??0),late=(counts.LATE??0),early=(counts.EARLY_EXIT??0),lateEarly=(counts.LATE_AND_EARLY_EXIT??0),half=(counts.HALF_DAY??0),weekly=(counts.WEEKLY_OFF??0),holiday=(counts.HOLIDAY??0),missing=(counts.MISSING_PUNCH??0),noShift=(counts.NO_SHIFT??0),unmatched=(counts.UNMATCHED??0);
- const recorded=present+late+early+lateEarly+half+weekly+holiday+missing+noShift+unmatched+(counts.ABSENT??0); const absent=Math.max(counts.ABSENT??0,Math.max(0,calendar-recorded)); const payable=present+late+early+lateEarly+half*.5+weekly+holiday;
+ const recorded=present+late+early+lateEarly+half+weekly+holiday+missing+noShift+unmatched+(counts.ABSENT??0); const absent=Math.max(counts.ABSENT??0,Math.max(0,calendar-recorded)); const payable=present+late+early+lateEarly+missing+half*.5+weekly+holiday;
  const base=n(salary.monthly_salary??salary.daily_rate??salary.hourly_rate); let attendanceDeduction=0,gross=0;
  if(salary.salary_type==="MONTHLY"){const daily=base/(new Date(Date.UTC(Number(p.period_start.slice(0,4)),Number(p.period_start.slice(5,7)),0)).getUTCDate());attendanceDeduction=money(daily*Math.max(0,calendar-payable));gross=money(base);}
  if(salary.salary_type==="DAILY")gross=money(payable*base);

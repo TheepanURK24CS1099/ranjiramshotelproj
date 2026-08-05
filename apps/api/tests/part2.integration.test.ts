@@ -96,7 +96,7 @@ describe("Part 2: Individual Employee Attendance Report", () => {
 
     const { summary } = res.body as { summary: Record<string, unknown> };
     expect(summary.totalWorkingDays).toBe(4);
-    expect(summary.presentDays).toBe(2);
+    expect(summary.presentDays).toBe(3);
     expect(summary.absentDays).toBe(1);
     expect(summary.lateDays).toBe(1);
     expect(summary.missingPunches).toBe(1);

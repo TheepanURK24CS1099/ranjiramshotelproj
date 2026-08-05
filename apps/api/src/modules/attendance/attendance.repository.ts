@@ -762,7 +762,20 @@ function evaluateMultiSessionAttendance(
   if (anyCheckedIn) {
     overallStatus = "CURRENTLY_CHECKED_IN";
     note = totalLateMinutes ? `Late by ${totalLateMinutes} minutes; awaiting punch out` : "Awaiting punch out";
-  } else if (completedSessions.length > 0) {
+  } else if (assignedPunchIds.size === 0) {
+    if (allNotStarted) {
+      overallStatus = "PENDING";
+      note = "Shift not started";
+    } else if (now >= lastSw.deadline && sessionRecords.every((sr) => sr.status === "MISSING_IN" || sr.status === "CHECK_IN_MISSING")) {
+      overallStatus = "ABSENT";
+      note = "No biometric attendance recorded";
+    } else {
+      overallStatus = "CHECK_IN_MISSING";
+      note = now < new Date(firstSw.sStart.getTime() + (firstSw.session.grace_minutes ?? 0) * 60_000)
+        ? "Awaiting check-in"
+        : "Check-in fingerprint missing";
+    }
+  } else {
     if (!anyMissing && totalMinWorkReq > 0 && totalWorkingMinutes < totalMinWorkReq) {
       overallStatus = "HALF_DAY";
       note = "Below minimum working minutes";
@@ -778,38 +791,10 @@ function evaluateMultiSessionAttendance(
 
     if (hasOutOfShiftCheckout) {
       note = "Checkout outside shift window";
+    } else if (anyMissing && !note) {
+      const isMissingIn = sessionRecords.some((sr) => sr.status === "MISSING_IN");
+      note = isMissingIn ? "Missing punch in" : "Missing punch out";
     }
-  } else if (assignedPunchIds.size === 0) {
-    if (allNotStarted) {
-      overallStatus = "PENDING";
-      note = "Shift not started";
-    } else if (now >= lastSw.deadline && sessionRecords.every((sr) => sr.status === "MISSING_IN" || sr.status === "CHECK_IN_MISSING")) {
-      overallStatus = "ABSENT";
-      note = "No biometric attendance recorded";
-    } else {
-      overallStatus = "CHECK_IN_MISSING";
-      note = now < new Date(firstSw.sStart.getTime() + (firstSw.session.grace_minutes ?? 0) * 60_000)
-        ? "Awaiting check-in"
-        : "Check-in fingerprint missing";
-    }
-  } else if (anyMissing) {
-    overallStatus = "MISSING_PUNCH";
-    note = "Missing punch out";
-  } else if (totalMinWorkReq > 0 && totalWorkingMinutes < totalMinWorkReq) {
-    overallStatus = "HALF_DAY";
-    note = "Below minimum working minutes";
-  } else if (totalLateMinutes > 0 && totalEarlyExitMinutes > 0) {
-    overallStatus = "LATE_AND_EARLY_EXIT";
-  } else if (totalLateMinutes > 0) {
-    overallStatus = "LATE";
-  } else if (totalEarlyExitMinutes > 0) {
-    overallStatus = "EARLY_EXIT";
-  } else {
-    overallStatus = "PRESENT";
-  }
-
-  if (hasOutOfShiftCheckout && !anyCheckedIn) {
-    note = "Checkout outside shift window";
   }
 
   return {
@@ -1217,9 +1202,9 @@ export async function getAttendanceSummary(date: string): Promise<AttendanceDash
   const attendanceDate = assertDate(date);
   const result = await pool.query<AttendanceDashboardSummary>(
     `SELECT
-      COUNT(*) FILTER (WHERE status IN ('PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT'))::int AS "presentToday",
+      COUNT(*) FILTER (WHERE status IN ('PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY') OR status = 'MISSING_PUNCH')::int AS "presentToday",
       COUNT(*) FILTER (WHERE status = 'CURRENTLY_CHECKED_IN')::int AS "currentlyCheckedIn",
-      COUNT(*) FILTER (WHERE status = 'MISSING_PUNCH')::int AS "missingPunchOut",
+      COUNT(*) FILTER (WHERE status = 'MISSING_PUNCH' OR session_records @> '[{"missing_punch": true}]'::jsonb)::int AS "missingPunchOut",
       COUNT(*) FILTER (WHERE status = 'UNMATCHED')::int AS "unmatchedPunches"
      FROM daily_attendance_records
      WHERE attendance_date = $1::date`,

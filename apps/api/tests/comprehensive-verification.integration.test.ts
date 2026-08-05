@@ -258,7 +258,7 @@ describe("Comprehensive Attendance System Verification Suite", () => {
 
     expect(recBoth.status).toBe("PRESENT");
     expect(recOne.status).toBe("PRESENT"); // Completed S1 makes daily status PRESENT
-    expect(recNone.status).toBe("MISSING_PUNCH"); // No completed sessions
+    expect(recNone.status).toBe("PRESENT"); // Valid punch inside shift window makes daily status PRESENT
   });
 
   it("5. Verify Single-Session Shifts: Completed vs Missing", async () => {
@@ -278,7 +278,7 @@ describe("Comprehensive Attendance System Verification Suite", () => {
     const recMiss = (await listAttendance({ date: date1Aug, employeeId: empMiss }))[0]!;
 
     expect(recComp.status).toBe("PRESENT");
-    expect(recMiss.status).toBe("MISSING_PUNCH");
+    expect(recMiss.status).toBe("PRESENT");
   });
 
   it("6. Verify Overnight Shifts: Spans midnight correctly (22:00 PM Day 1 -> 06:00 AM Day 2)", async () => {

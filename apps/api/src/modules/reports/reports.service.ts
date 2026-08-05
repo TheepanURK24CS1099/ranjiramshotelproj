@@ -42,10 +42,10 @@ export async function attendance(q: Query) {
       COALESCE(cs.name, MAX(s.name), 'Historical/Unassigned') AS shift,
       CASE WHEN e.active THEN 'Active' WHEN e.active IS FALSE THEN 'Inactive' ELSE '—' END AS active_status,
       COUNT(*)::int AS total_working_days,
-      COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY'))::int AS present_days,
+      COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY') OR a.status='MISSING_PUNCH')::int AS present_days,
       COUNT(*) FILTER (WHERE a.status='ABSENT')::int AS absent_days,
       COUNT(*) FILTER (WHERE a.status IN ('LATE','LATE_AND_EARLY_EXIT'))::int AS late_days,
-      COUNT(*) FILTER (WHERE a.status='MISSING_PUNCH')::int AS missing_punches,
+      COUNT(*) FILTER (WHERE a.status='MISSING_PUNCH' OR a.session_records @> '[{"missing_punch": true}]'::jsonb)::int AS missing_punches,
       COALESCE(SUM(a.working_minutes), 0)::int AS total_worked_minutes,
       ROUND(COALESCE(SUM(a.working_minutes),0)/60.0, 1)::text AS total_worked_hours,
       0::int AS overtime_minutes,
@@ -79,10 +79,10 @@ export async function attendance(q: Query) {
     SELECT
       COUNT(DISTINCT a.employee_id)::int AS total_employees,
       COUNT(DISTINCT a.employee_id) FILTER (WHERE e.active)::int AS active_employees,
-      COUNT(*) FILTER (WHERE a.status IN ('PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY'))::int AS present,
+      COUNT(*) FILTER (WHERE a.status IN ('PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY') OR a.status = 'MISSING_PUNCH')::int AS present,
       COUNT(*) FILTER (WHERE a.status = 'ABSENT')::int AS absent,
       COUNT(*) FILTER (WHERE a.status IN ('LATE', 'LATE_AND_EARLY_EXIT'))::int AS late,
-      COUNT(*) FILTER (WHERE a.status = 'MISSING_PUNCH')::int AS missing_punches
+      COUNT(*) FILTER (WHERE a.status = 'MISSING_PUNCH' OR a.session_records @> '[{"missing_punch": true}]'::jsonb)::int AS missing_punches
     FROM daily_attendance_records a
     LEFT JOIN employees e ON e.id = a.employee_id
     ${where}
@@ -180,7 +180,7 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
         ELSE '—'
       END AS early_exit_by,
       '—' AS overtime,
-      CASE WHEN a.status = 'MISSING_PUNCH' THEN 'Yes' ELSE 'No' END AS missing_punch,
+      CASE WHEN a.status = 'MISSING_PUNCH' OR a.session_records @> '[{"missing_punch": true}]'::jsonb THEN 'Yes' ELSE 'No' END AS missing_punch,
       COALESCE(a.note, '—') AS notes
     FROM daily_attendance_records a
     LEFT JOIN shifts s ON s.id = a.shift_id
@@ -196,13 +196,13 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
   const summarySql = `
     SELECT
       COUNT(*)::int AS total_working_days,
-      COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY'))::int AS present_days,
+      COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY') OR a.status = 'MISSING_PUNCH')::int AS present_days,
       COUNT(*) FILTER (WHERE a.status = 'ABSENT')::int AS absent_days,
       COUNT(*) FILTER (WHERE a.status IN ('LATE','LATE_AND_EARLY_EXIT'))::int AS late_days,
       COUNT(*) FILTER (WHERE a.status IN ('EARLY_EXIT','LATE_AND_EARLY_EXIT'))::int AS early_exits,
       COUNT(*) FILTER (WHERE a.status = 'HOLIDAY')::int AS holidays,
       COUNT(*) FILTER (WHERE a.status = 'WEEKLY_OFF')::int AS weekly_offs,
-      COUNT(*) FILTER (WHERE a.status = 'MISSING_PUNCH')::int AS missing_punches,
+      COUNT(*) FILTER (WHERE a.status = 'MISSING_PUNCH' OR a.session_records @> '[{"missing_punch": true}]'::jsonb)::int AS missing_punches,
       ROUND(COALESCE(SUM(a.working_minutes),0)/60.0, 1)::text AS total_worked_hours
     FROM daily_attendance_records a
     ${where}

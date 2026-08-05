@@ -155,7 +155,7 @@ export default function AttendancePage() {
         presentCount++;
       }
       if (row.status === "CURRENTLY_CHECKED_IN") checkedInCount++;
-      if (row.status === "MISSING_PUNCH") missingPunchCount++;
+      if (row.status === "MISSING_PUNCH" || row.session_records?.some((sr) => sr.missing_punch)) missingPunchCount++;
       if (row.late_minutes > 0) lateCount++;
       if (row.early_exit_minutes > 0) earlyExitCount++;
     }
