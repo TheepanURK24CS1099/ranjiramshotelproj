@@ -502,21 +502,27 @@ export default function ReportsPage() {
               <table className="min-w-full text-sm text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200/80 bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    {columns.map((c) => (
-                      <th className="px-5 py-4 whitespace-nowrap" key={c}>
-                        {getColumnHeader(c)}
-                      </th>
-                    ))}
+                    {columns.map((c) => {
+                      const isNumeric = ["total_working_days", "present_days", "absent_days", "late_days", "overtime"].includes(c);
+                      return (
+                        <th className={`px-4 py-3.5 whitespace-nowrap ${isNumeric ? "text-right" : "text-left"}`} key={c}>
+                          {getColumnHeader(c)}
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {items.map((row, i) => (
                     <tr className="hover:bg-slate-50/70 transition-colors" key={i}>
-                      {columns.map((c) => (
-                        <td className="px-5 py-4 whitespace-nowrap text-slate-700" key={c}>
-                          {renderCell(c, row)}
-                        </td>
-                      ))}
+                      {columns.map((c) => {
+                        const isNumeric = ["total_working_days", "present_days", "absent_days", "late_days", "overtime"].includes(c);
+                        return (
+                          <td className={`px-4 py-3.5 whitespace-nowrap text-slate-700 ${isNumeric ? "text-right font-medium" : "text-left"}`} key={c}>
+                            {renderCell(c, row)}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
