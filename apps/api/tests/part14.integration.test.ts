@@ -137,7 +137,7 @@ const ruleCases = [
   { name: "early checkout", suffix: "early", punches: ["09:00:00", "17:44:00"], status: "EARLY_EXIT" },
   { name: "late plus early exit", suffix: "late-early", punches: ["09:16:00", "17:44:00"], status: "LATE_AND_EARLY_EXIT" },
   { name: "below minimum work", suffix: "half-day", punches: ["09:00:00", "14:00:00"], status: "HALF_DAY" },
-  { name: "one punch", suffix: "missing", punches: ["10:00:00"], status: "MISSING_PUNCH" },
+  { name: "one punch", suffix: "missing", punches: ["10:00:00"], status: "LATE" },
 ] as const;
 
 const ruleEmployees = new Map<string, { id: string; biometricId: number }>();

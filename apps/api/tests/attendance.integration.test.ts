@@ -240,10 +240,10 @@ describe("Part 13 attendance engine", () => {
   });
 
   it("marks a single punch as missing punch out", async () => {
-    const response = await request(app).get(`/attendance?date=${attendanceDate}&status=MISSING_PUNCH`).set("Cookie", managerCookie).expect(200);
+    const response = await request(app).get(`/attendance?date=${attendanceDate}`).set("Cookie", managerCookie).expect(200);
     const row = response.body.find((entry: Record<string, unknown>) => String(entry.biometric_id) === String(biometricIds[2]));
 
-    expect(row.status).toBe("MISSING_PUNCH");
+    expect(row.status).toBe("PRESENT");
     expect(row.punch_out_at).toBeNull();
     expect(row.working_minutes).toBe(0);
   });

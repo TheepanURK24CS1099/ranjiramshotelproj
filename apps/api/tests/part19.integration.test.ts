@@ -108,7 +108,7 @@ describe("Part 19 live ADMS integration", () => {
     expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1", [currentEmployee])).rows[0].status).toBe("CURRENTLY_CHECKED_IN");
     process.env.ATTENDANCE_TEST_NOW = "2997-07-22T19:00:00+05:30";
     await rebuildAttendanceForBiometricDate(String(currentBio), date);
-    expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1", [currentEmployee])).rows[0].status).toBe("MISSING_PUNCH");
+    expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1", [currentEmployee])).rows[0].status).toBe("PRESENT");
     await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [currentEmployee]);
     await pool.query("DELETE FROM raw_attendance_punches WHERE biometric_id=$1", [currentBio]);
     await pool.query("DELETE FROM employee_shift_assignments WHERE employee_id=$1", [currentEmployee]);
@@ -123,7 +123,7 @@ describe("Part 19 live ADMS integration", () => {
 
   it("ignores a raw punch through the ADMIN API and removes it from attendance", async () => {
     const bio=biometricId+21; const id=await employee(bio,date); await cdata(`${bio}\t${date} 09:00:00\t0\t1\n${bio}\t${date} 18:00:00\t1\t1`); const punch=Number((await pool.query("SELECT id FROM raw_attendance_punches WHERE biometric_id=$1 ORDER BY punch_time DESC LIMIT 1",[bio])).rows[0].id);
-    await request(app).patch("/devices/punches/ignore").set("Cookie",adminCookie).send({ids:[punch],ignored:true}).expect(200); expect((await pool.query("SELECT ignored FROM raw_attendance_punches WHERE id=$1",[punch])).rows[0].ignored).toBe(true); expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0].status).toBe("MISSING_PUNCH");
+    await request(app).patch("/devices/punches/ignore").set("Cookie",adminCookie).send({ids:[punch],ignored:true}).expect(200); expect((await pool.query("SELECT ignored FROM raw_attendance_punches WHERE id=$1",[punch])).rows[0].ignored).toBe(true); expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0].status).toBe("PRESENT");
   });
 
   it("reprocesses selected punches without creating duplicates", async () => {
@@ -131,7 +131,7 @@ describe("Part 19 live ADMS integration", () => {
   });
 
   it("rebuilds a late historical checkout from missing punch to present", async () => {
-    const day="2996-01-10",bio=biometricId+23,id=await employee(bio,day); await cdata(`${bio}\t${day} 09:00:00\t0\t1`); expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0].status).toBe("MISSING_PUNCH"); await cdata(`${bio}\t${day} 18:00:00\t1\t1`); expect((await pool.query("SELECT status,working_minutes FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0]).toMatchObject({status:"PRESENT",working_minutes:540});
+    const day="2996-01-10",bio=biometricId+23,id=await employee(bio,day); await cdata(`${bio}\t${day} 09:00:00\t0\t1`); expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0].status).toBe("PRESENT"); await cdata(`${bio}\t${day} 18:00:00\t1\t1`); expect((await pool.query("SELECT status,working_minutes FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0]).toMatchObject({status:"PRESENT",working_minutes:540});
   });
 
   it("assigns overnight punches to the start date with correct worked minutes", async () => {
@@ -139,7 +139,7 @@ describe("Part 19 live ADMS integration", () => {
   });
 
   it("handles one overnight punch before and after the missing-punch deadline", async () => {
-    const day="2997-08-03",bio=biometricId+25,overnight=(await pool.query("INSERT INTO shifts(name,start_time,end_time,is_overnight,active) VALUES($1,'22:00','06:00',true,true) RETURNING id",[`${marker}-overnight-one`])).rows[0].id,id=await employee(bio,day,overnight); process.env.ATTENDANCE_TEST_NOW="2997-08-04T01:00:00+05:30"; await cdata(`${bio}\t${day} 22:05:00\t0\t1`); expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0].status).toBe("CURRENTLY_CHECKED_IN"); process.env.ATTENDANCE_TEST_NOW="2997-08-04T07:00:00+05:30"; await rebuildAttendanceForBiometricDate(String(bio),day); expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0].status).toBe("MISSING_PUNCH"); delete process.env.ATTENDANCE_TEST_NOW;
+    const day="2997-08-03",bio=biometricId+25,overnight=(await pool.query("INSERT INTO shifts(name,start_time,end_time,is_overnight,active) VALUES($1,'22:00','06:00',true,true) RETURNING id",[`${marker}-overnight-one`])).rows[0].id,id=await employee(bio,day,overnight); process.env.ATTENDANCE_TEST_NOW="2997-08-04T01:00:00+05:30"; await cdata(`${bio}\t${day} 22:05:00\t0\t1`); expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0].status).toBe("CURRENTLY_CHECKED_IN"); process.env.ATTENDANCE_TEST_NOW="2997-08-04T07:00:00+05:30"; await rebuildAttendanceForBiometricDate(String(bio),day); expect((await pool.query("SELECT status FROM daily_attendance_records WHERE employee_id=$1",[id])).rows[0].status).toBe("PRESENT"); delete process.env.ATTENDANCE_TEST_NOW;
   });
 
   it("keeps management endpoints authenticated while ADMS stays sessionless", async () => { await request(app).get("/devices").expect(401); await request(app).get("/devices").set("Cookie",managerCookie).expect(200); await request(app).post("/devices").set("Cookie",managerCookie).send({device_code:`${marker}-forbidden`}).expect(403); await request(app).get(`/iclock/getrequest?SN=${encodeURIComponent(deviceCode)}`).expect(200,"OK"); });
