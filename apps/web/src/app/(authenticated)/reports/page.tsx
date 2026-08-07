@@ -198,8 +198,8 @@ const ATTENDANCE_SUMMARY_COLUMNS = [
   "total_working_days",
   "present_days",
   "absent_days",
-  "late_days",
-  "overtime",
+  "shift1_summary",
+  "shift2_summary",
   "view_report",
 ];
 
@@ -212,8 +212,8 @@ function getColumnHeader(c: string): string {
   if (c === "total_working_days") return "Total Days";
   if (c === "present_days") return "Present Days";
   if (c === "absent_days") return "Absent Days";
-  if (c === "late_days") return "Late Days";
-  if (c === "overtime") return "Overtime";
+  if (c === "shift1_summary") return "Shift 1";
+  if (c === "shift2_summary") return "Shift 2";
   if (c === "view_report") return "View Report";
   return c.replaceAll("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
@@ -232,16 +232,8 @@ function renderCell(c: string, row: Record<string, unknown>) {
     );
   }
 
-  if (c === "overtime") {
-    const minutes =
-      typeof row.overtime_minutes === "number"
-        ? row.overtime_minutes
-        : row.overtime_minutes !== undefined && row.overtime_minutes !== null
-        ? Number(row.overtime_minutes) || 0
-        : row.overtime_hours !== undefined && row.overtime_hours !== null
-        ? Math.round((Number(row.overtime_hours) || 0) * 60)
-        : 0;
-    return formatWorkingMinutes(minutes);
+  if (c === "shift1_summary" || c === "shift2_summary") {
+    return <span className="font-semibold text-slate-900">{String(val ?? "0 / 0")}</span>;
   }
 
   if (val === null || val === undefined) return <span className="text-slate-400">—</span>;
@@ -503,7 +495,7 @@ export default function ReportsPage() {
                 <thead>
                   <tr className="border-b border-slate-200/80 bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     {columns.map((c) => {
-                      const isNumeric = ["total_working_days", "present_days", "absent_days", "late_days", "overtime"].includes(c);
+                      const isNumeric = ["total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary"].includes(c);
                       return (
                         <th className={`px-4 py-3.5 whitespace-nowrap ${isNumeric ? "text-right" : "text-left"}`} key={c}>
                           {getColumnHeader(c)}
@@ -516,7 +508,7 @@ export default function ReportsPage() {
                   {items.map((row, i) => (
                     <tr className="hover:bg-slate-50/70 transition-colors" key={i}>
                       {columns.map((c) => {
-                        const isNumeric = ["total_working_days", "present_days", "absent_days", "late_days", "overtime"].includes(c);
+                        const isNumeric = ["total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary"].includes(c);
                         return (
                           <td className={`px-4 py-3.5 whitespace-nowrap text-slate-700 ${isNumeric ? "text-right font-medium" : "text-left"}`} key={c}>
                             {renderCell(c, row)}
