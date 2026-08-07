@@ -50,6 +50,49 @@ export async function attendance(q: Query) {
       ROUND(COALESCE(SUM(a.working_minutes),0)/60.0, 1)::text AS total_worked_hours,
       0::int AS overtime_minutes,
       '0.0'::text AS overtime_hours,
+      COALESCE(
+        COUNT(*) FILTER (
+          WHERE a.status NOT IN ('HOLIDAY', 'WEEKLY_OFF', 'NO_SHIFT')
+            AND EXISTS (
+              SELECT 1 FROM jsonb_array_elements(a.session_records) s
+              WHERE (s->>'session_number')::int = 1
+                AND (s->>'status' IN ('COMPLETED', 'PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY')
+                     OR (s->>'worked_minutes')::int > 0
+                     OR (s->>'punch_in_id' IS NOT NULL AND s->>'punch_out_id' IS NOT NULL))
+            )
+        )::text || ' / ' ||
+        COUNT(*) FILTER (
+          WHERE a.status NOT IN ('HOLIDAY', 'WEEKLY_OFF', 'NO_SHIFT')
+            AND (
+              jsonb_array_length(a.session_records) >= 1
+              OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements(a.session_records) s
+                WHERE (s->>'session_number')::int = 1
+              )
+            )
+        )::text,
+        '0 / 0'
+      ) AS shift1_summary,
+      COALESCE(
+        COUNT(*) FILTER (
+          WHERE a.status NOT IN ('HOLIDAY', 'WEEKLY_OFF', 'NO_SHIFT')
+            AND EXISTS (
+              SELECT 1 FROM jsonb_array_elements(a.session_records) s
+              WHERE (s->>'session_number')::int = 2
+                AND (s->>'status' IN ('COMPLETED', 'PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY')
+                     OR (s->>'worked_minutes')::int > 0
+                     OR (s->>'punch_in_id' IS NOT NULL AND s->>'punch_out_id' IS NOT NULL))
+            )
+        )::text || ' / ' ||
+        COUNT(*) FILTER (
+          WHERE a.status NOT IN ('HOLIDAY', 'WEEKLY_OFF', 'NO_SHIFT')
+            AND EXISTS (
+              SELECT 1 FROM jsonb_array_elements(a.session_records) s
+              WHERE (s->>'session_number')::int = 2
+            )
+        )::text,
+        '0 / 0'
+      ) AS shift2_summary,
       'View Report' AS view_report
     FROM daily_attendance_records a
     LEFT JOIN employees e ON e.id = a.employee_id
@@ -133,6 +176,30 @@ export async function attendance(q: Query) {
   return result(rows.rows, Number(count.rows[0]?.total ?? 0), q, summary);
 }
 
+function deriveSessionStatusString(dayStatus: string, s?: Record<string, any>): string {
+  if (!s) {
+    if (dayStatus === 'HOLIDAY') return 'Holiday';
+    if (dayStatus === 'WEEKLY_OFF') return 'Weekly Off';
+    if (dayStatus === 'ABSENT') return 'Absent';
+    if (dayStatus === 'PRESENT') return 'Present';
+    return '—';
+  }
+  const st = String(s.status || '');
+  if (dayStatus === 'HOLIDAY') return 'Holiday';
+  if (dayStatus === 'WEEKLY_OFF') return 'Weekly Off';
+  if (st === 'MISSING_IN' || st === 'CHECK_IN_MISSING' || (s.missing_punch && !s.punch_in_id)) return 'Check-in Missing';
+  if (st === 'MISSING_OUT' || (s.missing_punch && !s.punch_out_id)) return 'Check-out Missing';
+  if (st === 'LATE_AND_EARLY_EXIT') return 'Late & Early Exit';
+  if (st === 'LATE' || Number(s.late_minutes || 0) > 0) return 'Late';
+  if (st === 'EARLY_EXIT' || Number(s.early_exit_minutes || 0) > 0) return 'Early Exit';
+  if (st === 'HALF_DAY') return 'Half Day';
+  if (st === 'COMPLETED' || st === 'PRESENT' || Number(s.worked_minutes || 0) > 0) return 'Present';
+  if (dayStatus === 'ABSENT' || st === 'ABSENT') return 'Absent';
+  if (st === 'PENDING') return 'Pending';
+  if (st === 'NOT_STARTED') return 'Not Started';
+  return st ? st.replaceAll('_', ' ') : '—';
+}
+
 export async function employeeAttendanceDetail(employeeId: string, q: Query) {
   if (!employeeId || typeof employeeId !== "string") throw new Error("Validation: employeeId is required");
   const { from, to } = range(q);
@@ -156,8 +223,53 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
   if (to) { v.push(to); c.push(`a.attendance_date <= $${v.length}::date`); }
   const where = `WHERE ${c.join(" AND ")}`;
 
+  const allRecordsRes = await pool.query(
+    `SELECT a.status, a.session_records
+     FROM daily_attendance_records a
+     ${where}`,
+    v,
+  );
+
+  const shift1Summary = { completed: 0, expected: 0, present: 0, late: 0, earlyExit: 0, absent: 0, halfDay: 0, checkinMissing: 0, checkoutMissing: 0, pending: 0 };
+  const shift2Summary = { completed: 0, expected: 0, present: 0, late: 0, earlyExit: 0, absent: 0, halfDay: 0, checkinMissing: 0, checkoutMissing: 0, pending: 0 };
+
+  for (const rec of allRecordsRes.rows) {
+    const dayStatus = String(rec.status || '');
+    const sessions = Array.isArray(rec.session_records) ? rec.session_records : [];
+    const isWorkingDay = !['HOLIDAY', 'WEEKLY_OFF', 'NO_SHIFT'].includes(dayStatus);
+
+    const s1 = sessions.find((x: any) => Number(x.session_number) === 1);
+    const s2 = sessions.find((x: any) => Number(x.session_number) === 2);
+
+    if (isWorkingDay && s1) {
+      shift1Summary.expected += 1;
+      const s1Label = deriveSessionStatusString(dayStatus, s1);
+      if (s1Label === 'Present') { shift1Summary.present += 1; shift1Summary.completed += 1; }
+      else if (s1Label === 'Late' || s1Label === 'Late & Early Exit') { shift1Summary.late += 1; shift1Summary.completed += 1; }
+      else if (s1Label === 'Early Exit') { shift1Summary.earlyExit += 1; shift1Summary.completed += 1; }
+      else if (s1Label === 'Half Day') { shift1Summary.halfDay += 1; shift1Summary.completed += 1; }
+      else if (s1Label === 'Check-in Missing') { shift1Summary.checkinMissing += 1; }
+      else if (s1Label === 'Check-out Missing') { shift1Summary.checkoutMissing += 1; }
+      else if (s1Label === 'Pending') { shift1Summary.pending += 1; }
+      else if (s1Label === 'Absent') { shift1Summary.absent += 1; }
+    }
+
+    if (isWorkingDay && s2) {
+      shift2Summary.expected += 1;
+      const s2Label = deriveSessionStatusString(dayStatus, s2);
+      if (s2Label === 'Present') { shift2Summary.present += 1; shift2Summary.completed += 1; }
+      else if (s2Label === 'Late' || s2Label === 'Late & Early Exit') { shift2Summary.late += 1; shift2Summary.completed += 1; }
+      else if (s2Label === 'Early Exit') { shift2Summary.earlyExit += 1; shift2Summary.completed += 1; }
+      else if (s2Label === 'Half Day') { shift2Summary.halfDay += 1; shift2Summary.completed += 1; }
+      else if (s2Label === 'Check-in Missing') { shift2Summary.checkinMissing += 1; }
+      else if (s2Label === 'Check-out Missing') { shift2Summary.checkoutMissing += 1; }
+      else if (s2Label === 'Pending') { shift2Summary.pending += 1; }
+      else if (s2Label === 'Absent') { shift2Summary.absent += 1; }
+    }
+  }
+
   const { limit, offset } = paging(q);
-  v.push(limit, offset);
+  const paginatedV = [...v, limit, offset];
 
   const sql = `
     SELECT
@@ -171,22 +283,14 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
         ELSE '—'
       END AS worked_duration,
       a.status AS attendance_status,
-      CASE WHEN a.late_minutes > 0
-        THEN LPAD((a.late_minutes/60)::text,2,'0') || ':' || LPAD((a.late_minutes%60)::text,2,'0')
-        ELSE '—'
-      END AS late_by,
-      CASE WHEN a.early_exit_minutes > 0
-        THEN LPAD((a.early_exit_minutes/60)::text,2,'0') || ':' || LPAD((a.early_exit_minutes%60)::text,2,'0')
-        ELSE '—'
-      END AS early_exit_by,
-      '—' AS overtime,
-      CASE WHEN a.status = 'MISSING_PUNCH' OR a.session_records @> '[{"missing_punch": true}]'::jsonb THEN 'Yes' ELSE 'No' END AS missing_punch,
-      COALESCE(a.note, '—') AS notes
+      a.session_records,
+      COALESCE(a.note, '—') AS notes,
+      COALESCE(a.note, '—') AS remarks
     FROM daily_attendance_records a
     LEFT JOIN shifts s ON s.id = a.shift_id
     ${where}
     ORDER BY a.attendance_date DESC
-    LIMIT $${v.length - 1} OFFSET $${v.length}
+    LIMIT $${paginatedV.length - 1} OFFSET $${paginatedV.length}
   `;
 
   const countSql = `
@@ -208,11 +312,10 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
     ${where}
   `;
 
-  const countV = v.slice(0, -2);
   const [rows, countRes, summaryRes] = await Promise.all([
-    pool.query(sql, v),
-    pool.query<{ total: number }>(countSql, countV),
-    pool.query(summarySql, countV),
+    pool.query(sql, paginatedV),
+    pool.query<{ total: number }>(countSql, v),
+    pool.query(summarySql, v),
   ]);
 
   const s = summaryRes.rows[0] ?? {};
@@ -220,13 +323,10 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
     totalWorkingDays: Number(s.total_working_days ?? 0),
     presentDays: Number(s.present_days ?? 0),
     absentDays: Number(s.absent_days ?? 0),
-    lateDays: Number(s.late_days ?? 0),
-    earlyExits: Number(s.early_exits ?? 0),
-    holidays: Number(s.holidays ?? 0),
-    weeklyOffs: Number(s.weekly_offs ?? 0),
-    missingPunches: Number(s.missing_punches ?? 0),
-    totalWorkedHours: s.total_worked_hours ?? "0.0",
-    overtimeHours: "0.0",
+    shift1: `${shift1Summary.completed} / ${shift1Summary.expected}`,
+    shift2: `${shift2Summary.completed} / ${shift2Summary.expected}`,
+    shift1Summary,
+    shift2Summary,
   };
 
   const employee = {
@@ -238,7 +338,24 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
     current_shift: emp.current_shift,
   };
 
-  return { ...result(rows.rows, Number(countRes.rows[0]?.total ?? 0), q, {}), summary, employee };
+  const items = rows.rows.map((r: any) => {
+    const dayStatus = String(r.attendance_status || '');
+    const sessions = Array.isArray(r.session_records) ? r.session_records : [];
+    const s1 = sessions.find((x: any) => Number(x.session_number) === 1);
+    const s2 = sessions.find((x: any) => Number(x.session_number) === 2);
+
+    return {
+      date: r.date,
+      shift: r.shift,
+      shift1_status: deriveSessionStatusString(dayStatus, s1),
+      shift2_status: deriveSessionStatusString(dayStatus, s2),
+      worked_duration: r.worked_duration,
+      notes: r.notes,
+      remarks: r.remarks,
+    };
+  });
+
+  return { ...result(items, Number(countRes.rows[0]?.total ?? 0), q, {}), summary, employee };
 }
 
 export async function payroll(q: Query) { const c:string[]=[]; const v:unknown[]=[]; filter(q,c,v,"p.year","year"); filter(q,c,v,"p.month","month"); filter(q,c,v,"p.id","periodId"); filter(q,c,v,"r.employee_id","employeeId"); filter(q,c,v,"r.status","status"); const where=c.length?`WHERE ${c.join(" AND ")}`:""; const {limit,offset}=paging(q); v.push(limit,offset); const sql=`SELECT e.name employee,r.employee_id,e.biometric_id::text biometric_id,r.salary_type,r.base_salary::text,r.gross_pay::text gross_salary,r.attendance_deduction::text,r.advance_recovery::text,r.other_deductions::text manual_deductions,(r.gross_pay-r.base_salary)::text additions,r.net_pay::text net_salary,r.status payroll_status,p.status period_status,pp.payment_method,pp.payment_date::text,pp.payment_reference FROM employee_payroll_records r JOIN payroll_periods p ON p.id=r.payroll_period_id JOIN employees e ON e.id=r.employee_id LEFT JOIN payroll_payments pp ON pp.payroll_record_id=r.id AND pp.status='PAID' ${where} ORDER BY p.year DESC,p.month DESC,e.name LIMIT $${v.length-1} OFFSET $${v.length}`; const [rows,count]=await Promise.all([pool.query(sql,v),pool.query<{total:string}>(`SELECT COUNT(*) total FROM employee_payroll_records r JOIN payroll_periods p ON p.id=r.payroll_period_id ${where}`,v.slice(0,-2))]); const summary=rows.rows.reduce((x:any,r:any)=>({employeeCount:x.employeeCount+1,grossTotal:x.grossTotal+Number(r.gross_salary),deductionTotal:x.deductionTotal+Number(r.attendance_deduction)+Number(r.manual_deductions),advanceRecoveryTotal:x.advanceRecoveryTotal+Number(r.advance_recovery),netTotal:x.netTotal+Number(r.net_salary),paidTotal:x.paidTotal+(r.payroll_status==='PAID'?Number(r.net_salary):0),pendingTotal:x.pendingTotal+(r.payroll_status==='PAID'?0:Number(r.net_salary))}),{employeeCount:0,grossTotal:0,deductionTotal:0,advanceRecoveryTotal:0,netTotal:0,paidTotal:0,pendingTotal:0}); return result(rows.rows,Number(count.rows[0]?.total??0),q,summary); }

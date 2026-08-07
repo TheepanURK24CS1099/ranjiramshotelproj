@@ -14,31 +14,37 @@ type EmployeeHeader = {
   current_shift: string;
 };
 
+type ShiftSummaryDetail = {
+  present: number;
+  late: number;
+  earlyExit: number;
+  absent: number;
+  halfDay: number;
+  checkinMissing: number;
+  checkoutMissing: number;
+  pending: number;
+  completed: number;
+  expected: number;
+};
+
 type DailyRow = {
   date: string;
   shift: string;
-  first_punch_in: string | null;
-  last_punch_out: string | null;
+  shift1_status: string;
+  shift2_status: string;
   worked_duration: string;
-  attendance_status: string;
-  late_by: string;
-  early_exit_by: string;
-  overtime: string;
-  missing_punch: string;
   notes: string;
+  remarks?: string;
 };
 
 type Summary = {
   totalWorkingDays: number;
   presentDays: number;
   absentDays: number;
-  lateDays: number;
-  earlyExits: number;
-  holidays: number;
-  weeklyOffs: number;
-  missingPunches: number;
-  totalWorkedHours: string;
-  overtimeHours: string;
+  shift1: string;
+  shift2: string;
+  shift1Summary: ShiftSummaryDetail;
+  shift2Summary: ShiftSummaryDetail;
 };
 
 type ReportData = {
@@ -48,37 +54,23 @@ type ReportData = {
   pagination: { page: number; limit: number; total: number; pages: number };
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  PRESENT: "bg-emerald-50 text-emerald-800 border-emerald-300",
-  LATE: "bg-amber-50 text-amber-800 border-amber-300",
-  ABSENT: "bg-rose-50 text-rose-800 border-rose-300",
-  EARLY_EXIT: "bg-amber-50 text-amber-800 border-amber-300",
-  LATE_AND_EARLY_EXIT: "bg-amber-100 text-amber-900 border-amber-300",
-  HALF_DAY: "bg-sky-50 text-sky-800 border-sky-300",
-  MISSING_PUNCH: "bg-rose-100 text-rose-900 border-rose-300",
-  WEEKLY_OFF: "bg-slate-100 text-slate-600 border-slate-200",
-  HOLIDAY: "bg-purple-50 text-purple-800 border-purple-300",
-  NO_SHIFT: "bg-slate-100 text-slate-500 border-slate-200",
-};
+function getStatusBadgeClass(status: string) {
+  if (status === "Present") return "bg-emerald-50 text-emerald-800 border-emerald-300";
+  if (status === "Late" || status === "Early Exit" || status === "Late & Early Exit") return "bg-amber-50 text-amber-800 border-amber-300";
+  if (status === "Absent") return "bg-rose-50 text-rose-800 border-rose-300";
+  if (status === "Half Day") return "bg-sky-50 text-sky-800 border-sky-300";
+  if (status === "Check-in Missing" || status === "Check-out Missing") return "bg-rose-100 text-rose-900 border-rose-300";
+  if (status === "Weekly Off") return "bg-slate-100 text-slate-600 border-slate-200";
+  if (status === "Holiday") return "bg-purple-50 text-purple-800 border-purple-300";
+  if (status === "Pending") return "bg-amber-50 text-amber-800 border-amber-300";
+  return "bg-slate-100 text-slate-600 border-slate-200";
+}
 
 function todayMinus(days: number) {
   const d = new Date();
   d.setDate(d.getDate() - days);
   return d.toISOString().substring(0, 10);
 }
-
-const SUMMARY_LABELS: Array<[keyof Summary, string]> = [
-  ["totalWorkingDays", "Total Working Days"],
-  ["presentDays", "Present"],
-  ["absentDays", "Absent"],
-  ["lateDays", "Late"],
-  ["earlyExits", "Early Exits"],
-  ["holidays", "Holidays"],
-  ["weeklyOffs", "Weekly Offs"],
-  ["missingPunches", "Missing Punches"],
-  ["totalWorkedHours", "Worked Hours"],
-  ["overtimeHours", "Overtime Hours"],
-];
 
 export default function EmployeeAttendanceReportPage() {
   const params = useParams();
@@ -136,6 +128,8 @@ export default function EmployeeAttendanceReportPage() {
 
   const emp = data?.employee;
   const summary = data?.summary;
+  const s1 = summary?.shift1Summary;
+  const s2 = summary?.shift2Summary;
   const items = data?.items ?? [];
   const pagination = data?.pagination;
 
@@ -157,7 +151,7 @@ export default function EmployeeAttendanceReportPage() {
         </div>
       </div>
 
-      {/* Employee Header Card */}
+      {/* Employee Information Card */}
       {emp && (
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div>
@@ -266,25 +260,157 @@ export default function EmployeeAttendanceReportPage() {
         </div>
       )}
 
-      {/* Summary Cards */}
+      {/* Period Top Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {SUMMARY_LABELS.map(([key, label]) => (
-            <div key={key} className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</div>
-              <div className="text-xl font-extrabold text-slate-900 mt-1">{String(summary[key])}</div>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Days</div>
+            <div className="text-xl font-extrabold text-slate-900 mt-1">{summary.totalWorkingDays}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Present</div>
+            <div className="text-xl font-extrabold text-emerald-600 mt-1">{summary.presentDays}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Absent</div>
+            <div className="text-xl font-extrabold text-rose-600 mt-1">{summary.absentDays}</div>
+          </div>
+          <div className="rounded-2xl border border-teal-200 bg-teal-50/40 p-4 shadow-xs">
+            <div className="text-xs font-semibold text-[#028174] uppercase tracking-wider">Shift 1</div>
+            <div className="text-xl font-extrabold text-slate-900 mt-1">{summary.shift1 || "0 / 0"}</div>
+          </div>
+          <div className="rounded-2xl border border-teal-200 bg-teal-50/40 p-4 shadow-xs">
+            <div className="text-xs font-semibold text-[#028174] uppercase tracking-wider">Shift 2</div>
+            <div className="text-xl font-extrabold text-slate-900 mt-1">{summary.shift2 || "0 / 0"}</div>
+          </div>
         </div>
       )}
 
-      {/* Daily Records Table & Cards */}
+      {/* Shift 1 & Shift 2 Summary Cards Breakdown */}
+      {summary && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Shift 1 Summary Box */}
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-sm font-bold text-[#028174] uppercase tracking-wider flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-[#028174]" />
+                Shift 1 Summary
+              </h2>
+              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                Completed: {summary.shift1 || "0 / 0"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <div className="bg-teal-50/60 border border-teal-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-teal-800">Expected</div>
+                <div className="text-lg font-bold text-teal-900 mt-0.5">{s1?.expected ?? 0}</div>
+              </div>
+              <div className="bg-teal-50/60 border border-teal-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-teal-800">Completed</div>
+                <div className="text-lg font-bold text-teal-900 mt-0.5">{s1?.completed ?? 0}</div>
+              </div>
+              <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-emerald-800">Present</div>
+                <div className="text-lg font-bold text-emerald-900 mt-0.5">{s1?.present ?? 0}</div>
+              </div>
+              <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-amber-800">Late</div>
+                <div className="text-lg font-bold text-amber-900 mt-0.5">{s1?.late ?? 0}</div>
+              </div>
+              <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-amber-800">Early Exit</div>
+                <div className="text-lg font-bold text-amber-900 mt-0.5">{s1?.earlyExit ?? 0}</div>
+              </div>
+              <div className="bg-sky-50/60 border border-sky-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-sky-800">Half Day</div>
+                <div className="text-lg font-bold text-sky-900 mt-0.5">{s1?.halfDay ?? 0}</div>
+              </div>
+              <div className="bg-orange-50/60 border border-orange-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-orange-800">Check-in Missing</div>
+                <div className="text-lg font-bold text-orange-900 mt-0.5">{s1?.checkinMissing ?? 0}</div>
+              </div>
+              <div className="bg-orange-50/60 border border-orange-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-orange-800">Check-out Missing</div>
+                <div className="text-lg font-bold text-orange-900 mt-0.5">{s1?.checkoutMissing ?? 0}</div>
+              </div>
+              <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-rose-800">Absent</div>
+                <div className="text-lg font-bold text-rose-900 mt-0.5">{s1?.absent ?? 0}</div>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-slate-700">Pending</div>
+                <div className="text-lg font-bold text-slate-900 mt-0.5">{s1?.pending ?? 0}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Shift 2 Summary Box */}
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-sm font-bold text-[#028174] uppercase tracking-wider flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-[#028174]" />
+                Shift 2 Summary
+              </h2>
+              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                Completed: {summary.shift2 || "0 / 0"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <div className="bg-teal-50/60 border border-teal-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-teal-800">Expected</div>
+                <div className="text-lg font-bold text-teal-900 mt-0.5">{s2?.expected ?? 0}</div>
+              </div>
+              <div className="bg-teal-50/60 border border-teal-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-teal-800">Completed</div>
+                <div className="text-lg font-bold text-teal-900 mt-0.5">{s2?.completed ?? 0}</div>
+              </div>
+              <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-emerald-800">Present</div>
+                <div className="text-lg font-bold text-emerald-900 mt-0.5">{s2?.present ?? 0}</div>
+              </div>
+              <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-amber-800">Late</div>
+                <div className="text-lg font-bold text-amber-900 mt-0.5">{s2?.late ?? 0}</div>
+              </div>
+              <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-amber-800">Early Exit</div>
+                <div className="text-lg font-bold text-amber-900 mt-0.5">{s2?.earlyExit ?? 0}</div>
+              </div>
+              <div className="bg-sky-50/60 border border-sky-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-sky-800">Half Day</div>
+                <div className="text-lg font-bold text-sky-900 mt-0.5">{s2?.halfDay ?? 0}</div>
+              </div>
+              <div className="bg-orange-50/60 border border-orange-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-orange-800">Check-in Missing</div>
+                <div className="text-lg font-bold text-orange-900 mt-0.5">{s2?.checkinMissing ?? 0}</div>
+              </div>
+              <div className="bg-orange-50/60 border border-orange-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-orange-800">Check-out Missing</div>
+                <div className="text-lg font-bold text-orange-900 mt-0.5">{s2?.checkoutMissing ?? 0}</div>
+              </div>
+              <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-rose-800">Absent</div>
+                <div className="text-lg font-bold text-rose-900 mt-0.5">{s2?.absent ?? 0}</div>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-slate-700">Pending</div>
+                <div className="text-lg font-bold text-slate-900 mt-0.5">{s2?.pending ?? 0}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Daily Breakdown Table */}
       {loading ? (
         <div className="rounded-2xl bg-white p-12 text-center text-slate-500 text-sm font-medium shadow-xs border border-slate-200/90" role="status">
           Loading report…
         </div>
       ) : (
         <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Daily Breakdown</h2>
+          </div>
           {items.length === 0 ? (
             <div className="p-12 text-center text-slate-500 text-sm font-medium">
               No attendance records for this period.
@@ -295,41 +421,39 @@ export default function EmployeeAttendanceReportPage() {
                 <thead>
                   <tr className="border-b border-slate-200/80 bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     <th className="px-4 py-3.5 whitespace-nowrap">Date</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">Shift</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">First Punch In</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">Last Punch Out</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">Worked Duration</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">Status</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">Late By</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">Early Exit By</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">Overtime</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">Missing Punch</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">Notes</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Shift 1 Status</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Shift 2 Status</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap text-right">Working Hours</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">Remarks</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {items.map((row, i) => (
                     <tr key={i} className="hover:bg-slate-50/70 transition-colors">
                       <td className="px-4 py-3.5 whitespace-nowrap font-bold text-slate-900">{row.date}</td>
-                      <td className="px-4 py-3.5 whitespace-nowrap font-medium text-slate-700">{row.shift}</td>
-                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-800">{row.first_punch_in ?? "—"}</td>
-                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-800">{row.last_punch_out ?? "—"}</td>
-                      <td className="px-4 py-3.5 whitespace-nowrap font-semibold text-slate-900">{row.worked_duration}</td>
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold border ${
-                            STATUS_COLORS[row.attendance_status] ?? "bg-slate-100 text-slate-700 border-slate-200"
-                          }`}
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold border ${getStatusBadgeClass(
+                            row.shift1_status,
+                          )}`}
                         >
-                          {row.attendance_status.replaceAll("_", " ")}
+                          {row.shift1_status}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-700">{row.late_by}</td>
-                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-700">{row.early_exit_by}</td>
-                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-700">{row.overtime}</td>
-                      <td className="px-4 py-3.5 whitespace-nowrap text-slate-700">{row.missing_punch}</td>
-                      <td className="px-4 py-3.5 max-w-xs truncate text-xs text-slate-500" title={row.notes}>
-                        {row.notes}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold border ${getStatusBadgeClass(
+                            row.shift2_status,
+                          )}`}
+                        >
+                          {row.shift2_status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-right font-semibold text-slate-900">
+                        {row.worked_duration}
+                      </td>
+                      <td className="px-4 py-3.5 max-w-xs truncate text-xs text-slate-500" title={row.remarks || row.notes}>
+                        {row.remarks || row.notes || "—"}
                       </td>
                     </tr>
                   ))}
