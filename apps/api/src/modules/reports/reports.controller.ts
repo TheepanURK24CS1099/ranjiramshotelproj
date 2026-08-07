@@ -23,10 +23,11 @@ function label(key:string) {
   return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function csv(rows:Record<string,unknown>[]) {
-  const keys=Object.keys(rows[0]??{}).filter(key=>key!=="employee_id" && key !== "shift");
+function csv(rows:Record<string,unknown>[], customKeys?: string[], useLabels = true) {
+  const keys = customKeys ?? Object.keys(rows[0]??{}).filter(key=>key!=="employee_id" && key !== "shift");
   const cell=(v:unknown)=>`"${String(v??"").replaceAll('"','""')}"`;
-  return `\uFEFF${keys.map(k=>label(k)).join(',')}\r\n${rows.map(row=>keys.map(k=>cell(row[k])).join(',')).join('\r\n')}\r\n`;
+  const headers = useLabels ? keys.map(k=>label(k)) : keys;
+  return `\uFEFF${headers.join(',')}\r\n${rows.map(row=>keys.map(k=>cell(row[k])).join(',')).join('\r\n')}\r\n`;
 }
 
 function minutes(raw:unknown){const value=Number(raw);if(!Number.isFinite(value))return "0m";const hours=Math.floor(value/60),rest=Math.abs(value%60);return hours?`${hours}h ${String(rest).padStart(2,"0")}m`:`${rest}m`;}
@@ -36,9 +37,9 @@ function filterText(query:Request["query"]) { const selected=Object.entries(quer
 function pdf(title:string, rows:Record<string,unknown>[], query:Request["query"], reportName?: ReportName) {
   const document=new PDFDocument({layout:"landscape",size:"A4",margin:30,bufferPages:true});const chunks:Buffer[]=[];document.on("data",(chunk:Buffer)=>chunks.push(chunk));
   const isAttendanceSummary = reportName === "attendance-summary" || title.toLowerCase() === "attendance summary";
-  const columns=isAttendanceSummary ? ["employee", "present_days", "absent_days", "shift1_summary", "shift2_summary"] : Object.keys(rows[0]??{}).filter(key=>key!=="employee_id");
-  const left=30,right=30,generated=new Intl.DateTimeFormat("en-IN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kolkata"}).format(new Date());let y=0;
-  const colWidth = (index: number) => { if (!isAttendanceSummary) return (document.page.width - left - right) / Math.max(1, columns.length); const widths = [250, 130, 130, 135, 135]; return widths[index] ?? (document.page.width - left - right) / columns.length; };
+  const columns=isAttendanceSummary ? ["employee", "employee_code", "present_days", "absent_days", "shift1_summary", "shift2_summary", "overtime_hours"] : Object.keys(rows[0]??{}).filter(key=>key!=="employee_id");
+  const left=30,right=30,generated=new Intl.DateTimeFormat("en-IN",{dateStyle:"medium",timeZone:"Asia/Kolkata"}).format(new Date());let y=0;
+  const colWidth = (index: number) => { if (!isAttendanceSummary) return (document.page.width - left - right) / Math.max(1, columns.length); const widths = [160, 100, 80, 80, 110, 110, 80]; return widths[index] ?? (document.page.width - left - right) / columns.length; };
   const isNumeric = (col: string) => /(?:minutes|days|count|amount|salary|pay|balance|overtime)/iu.test(col);
   const header=()=>{document.font("Helvetica-Bold").fontSize(12).fillColor("#12304A").text("RANJI RAMS HOTEL",left,28);document.fontSize(8).text("Hotel Management System",left,44);document.fontSize(11).text(`${title} Report`,left,57);document.font("Helvetica").fontSize(7).fillColor("#444").text(`Filters: ${filterText(query)}`,left,73,{width:document.page.width-left-right});document.text(`Generated (IST): ${generated}`,left,84);document.moveTo(left,97).lineTo(document.page.width-right,97).strokeColor("#2C5D7B").stroke();let x=left;document.fillColor("#12304A").font("Helvetica-Bold").fontSize(7);columns.forEach((column,index)=>{const width=colWidth(index);document.text(label(column),x,104,{width:width-3,height:14,ellipsis:true,align:isNumeric(column)?"right":"left"});x+=width;});document.moveTo(left,120).lineTo(document.page.width-right,120).strokeColor("#999").stroke();document.font("Helvetica").fillColor("#111");y=124;};header();
   if(!rows.length)document.text("No matching records.",left,y);for(const row of rows){const cells=columns.map(column=>{const cellVal=column==="overtime"?(row.overtime_minutes??row.overtime??row.overtime_hours??0):row[column];return value(column,cellVal);});const height=Math.max(18,...cells.map((cell,index)=>document.heightOfString(cell,{width:colWidth(index)-4})))+6;if(y+height>document.page.height-38){document.addPage();header();}let x=left;cells.forEach((cell,index)=>{const width=colWidth(index);document.text(cell,x,y+3,{width:width-4,height:height-4,align:isNumeric(columns[index]!)?"right":"left"});x+=width;});document.moveTo(left,y+height).lineTo(document.page.width-right,y+height).strokeColor("#ddd").stroke();y+=height;}
@@ -159,8 +160,7 @@ function employeePdf(data: any, query: Request["query"]) {
 }
 
 export async function get(req:Request,res:Response){try{res.json(await reports.report(name(req),req.query));}catch(e){error(res,e)}}
-export async function exportReport(req:Request,res:Response){try{const report=await reports.report(name(req),{...req.query,page:1,limit:100});const title=name(req).replaceAll('-',' ');if(req.params.format==='csv')res.type('text/csv; charset=utf-8').attachment(`${name(req)}.csv`).send(csv(report.items as Record<string,unknown>[]));else res.type('application/pdf').set('Content-Disposition',`inline; filename=${name(req)}.pdf`).send(await pdf(title,report.items as Record<string,unknown>[],req.query,name(req)));}catch(e){error(res,e)}}
+export async function exportReport(req:Request,res:Response){try{const report=await reports.report(name(req),{...req.query,page:1,limit:100});const title=name(req).replaceAll('-',' ');const keys=name(req)==='attendance-summary'?["employee","employee_code","present_days","absent_days","shift1_summary","shift2_summary"]:undefined;if(req.params.format==='csv')res.type('text/csv; charset=utf-8').attachment(`${name(req)}.csv`).send(csv(report.items as Record<string,unknown>[],keys,true));else res.type('application/pdf').set('Content-Disposition',`inline; filename=${name(req)}.pdf`).send(await pdf(title,report.items as Record<string,unknown>[],req.query,name(req)));}catch(e){error(res,e)}}
 
 export async function getEmployeeAttendance(req:Request,res:Response){try{res.json(await reports.employeeAttendanceDetail(String(req.params.employeeId??''),req.query));}catch(e){error(res,e)}}
-export async function exportEmployeeAttendance(req:Request,res:Response){try{const empId=String(req.params.employeeId??'');const data=await reports.employeeAttendanceDetail(empId,{...req.query,page:1,limit:366});const emp=data.employee as Record<string,unknown>;if(req.params.format==='csv')res.type('text/csv; charset=utf-8').attachment(`attendance-${empId}.csv`).send(csv(data.items as Record<string,unknown>[]));else res.type('application/pdf').set('Content-Disposition',`inline; filename=attendance-${empId}.pdf`).send(await employeePdf(data,req.query));}catch(e){error(res,e)}}
-
+export async function exportEmployeeAttendance(req:Request,res:Response){try{const empId=String(req.params.employeeId??'');const data=await reports.employeeAttendanceDetail(empId,{...req.query,page:1,limit:366});const emp=data.employee as Record<string,unknown>;if(req.params.format==='csv')res.type('text/csv; charset=utf-8').attachment(`attendance-${empId}.csv`).send(csv(data.items as Record<string,unknown>[], ["date", "attendance_status", "shift1_status", "shift2_status", "worked_duration", "remarks"], false));else res.type('application/pdf').set('Content-Disposition',`inline; filename=attendance-${empId}.pdf`).send(await employeePdf(data,req.query));}catch(e){error(res,e)}}
