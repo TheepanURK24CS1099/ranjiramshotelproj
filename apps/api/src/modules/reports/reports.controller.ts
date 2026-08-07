@@ -105,8 +105,9 @@ function employeePdf(data: any, query: Request["query"]) {
   document.font("Helvetica-Bold").fontSize(7.5).fillColor("#12304A");
   let x = left;
   cols.forEach((col, i) => {
-    document.text(col, x, y, { width: widths[i] - 4 });
-    x += widths[i];
+    const width = widths[i] ?? 0;
+    document.text(col, x, y, { width: width - 4 });
+    x += width;
   });
   y += 14;
   document.moveTo(left, y).lineTo(document.page.width - right, y).strokeColor("#999").stroke();
@@ -120,8 +121,9 @@ function employeePdf(data: any, query: Request["query"]) {
       document.font("Helvetica-Bold").fontSize(7.5).fillColor("#12304A");
       let cx = left;
       cols.forEach((col, i) => {
-        document.text(col, cx, y, { width: widths[i] - 4 });
-        cx += widths[i];
+        const width = widths[i] ?? 0;
+        document.text(col, cx, y, { width: width - 4 });
+        cx += width;
       });
       y += 14;
       document.moveTo(left, y).lineTo(document.page.width - right, y).strokeColor("#999").stroke();
@@ -129,11 +131,16 @@ function employeePdf(data: any, query: Request["query"]) {
       document.font("Helvetica").fontSize(7.5).fillColor("#111");
     }
     let rx = left;
-    document.text(String(item.date || '—'), rx, y, { width: widths[0] - 4 }); rx += widths[0];
-    document.text(String(item.shift1_status || '—'), rx, y, { width: widths[1] - 4 }); rx += widths[1];
-    document.text(String(item.shift2_status || '—'), rx, y, { width: widths[2] - 4 }); rx += widths[2];
-    document.text(String(item.worked_duration || '—'), rx, y, { width: widths[3] - 4 }); rx += widths[3];
-    document.text(String(item.remarks || item.notes || '—'), rx, y, { width: widths[4] - 4, ellipsis: true });
+    const w0 = widths[0] ?? 0;
+    const w1 = widths[1] ?? 0;
+    const w2 = widths[2] ?? 0;
+    const w3 = widths[3] ?? 0;
+    const w4 = widths[4] ?? 0;
+    document.text(String(item.date || '—'), rx, y, { width: w0 - 4 }); rx += w0;
+    document.text(String(item.shift1_status || '—'), rx, y, { width: w1 - 4 }); rx += w1;
+    document.text(String(item.shift2_status || '—'), rx, y, { width: w2 - 4 }); rx += w2;
+    document.text(String(item.worked_duration || '—'), rx, y, { width: w3 - 4 }); rx += w3;
+    document.text(String(item.remarks || item.notes || '—'), rx, y, { width: w4 - 4, ellipsis: true });
     y += 16;
     document.moveTo(left, y).lineTo(document.page.width - right, y).strokeColor("#eee").stroke();
     y += 4;
