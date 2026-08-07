@@ -498,8 +498,11 @@ export default function ReportsPage() {
                   <tr className="border-b border-slate-200/80 bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     {columns.map((c) => {
                       const isCentered = ["total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary", "view_report"].includes(c);
+                      const isShiftCol = ["shift1_summary", "shift2_summary"].includes(c);
+                      const isNumericCol = ["total_working_days", "present_days", "absent_days"].includes(c);
+                      const paddingClass = isShiftCol ? "px-8 py-4 min-w-[130px]" : isNumericCol ? "px-6 py-4 min-w-[100px]" : "px-5 py-4";
                       return (
-                        <th className={`px-5 py-4 whitespace-nowrap ${isCentered ? "text-center" : "text-left"}`} key={c}>
+                        <th className={`${paddingClass} whitespace-nowrap ${isCentered ? "text-center" : "text-left"}`} key={c}>
                           {getColumnHeader(c)}
                         </th>
                       );
@@ -511,8 +514,11 @@ export default function ReportsPage() {
                     <tr className="hover:bg-slate-50/70 transition-colors" key={i}>
                       {columns.map((c) => {
                         const isCentered = ["total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary", "view_report"].includes(c);
+                        const isShiftCol = ["shift1_summary", "shift2_summary"].includes(c);
+                        const isNumericCol = ["total_working_days", "present_days", "absent_days"].includes(c);
+                        const paddingClass = isShiftCol ? "px-8 py-4 min-w-[130px]" : isNumericCol ? "px-6 py-4 min-w-[100px]" : "px-5 py-4";
                         return (
-                          <td className={`px-5 py-4 whitespace-nowrap text-slate-700 ${isCentered ? "text-center font-medium" : "text-left"}`} key={c}>
+                          <td className={`${paddingClass} whitespace-nowrap text-slate-700 ${isCentered ? "text-center font-medium" : "text-left"}`} key={c}>
                             {renderCell(c, row)}
                           </td>
                         );
