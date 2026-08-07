@@ -42,7 +42,7 @@ export async function attendance(q: Query) {
       COALESCE(cs.name, MAX(s.name), 'Historical/Unassigned') AS shift,
       CASE WHEN e.active THEN 'Active' WHEN e.active IS FALSE THEN 'Inactive' ELSE '—' END AS active_status,
       COUNT(*)::int AS total_working_days,
-      COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY') OR a.status='MISSING_PUNCH')::int AS present_days,
+      COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY','CURRENTLY_CHECKED_IN','CHECK_OUT_MISSING') OR a.status='MISSING_PUNCH')::int AS present_days,
       COUNT(*) FILTER (WHERE a.status='ABSENT')::int AS absent_days,
       COUNT(*) FILTER (WHERE a.status IN ('LATE','LATE_AND_EARLY_EXIT'))::int AS late_days,
       COUNT(*) FILTER (WHERE a.status='MISSING_PUNCH' OR a.session_records @> '[{"missing_punch": true}]'::jsonb)::int AS missing_punches,
@@ -53,23 +53,25 @@ export async function attendance(q: Query) {
       COALESCE(
         COUNT(*) FILTER (
           WHERE a.status NOT IN ('HOLIDAY', 'WEEKLY_OFF', 'NO_SHIFT')
-            AND EXISTS (
-              SELECT 1 FROM jsonb_array_elements(a.session_records) s
-              WHERE (s->>'session_number')::int = 1
-                AND (s->>'status' IN ('COMPLETED', 'PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY')
-                     OR (s->>'worked_minutes')::int > 0
-                     OR (s->>'punch_in_id' IS NOT NULL AND s->>'punch_out_id' IS NOT NULL))
+            AND (
+              EXISTS (
+                SELECT 1 FROM jsonb_array_elements(a.session_records) s
+                WHERE (s->>'session_number')::int = 1
+                  AND (s->>'status' IN ('COMPLETED', 'PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY', 'MISSING_OUT', 'CHECK_OUT_MISSING', 'CURRENTLY_CHECKED_IN')
+                       OR (s->>'worked_minutes')::int > 0
+                       OR s->>'punch_in_id' IS NOT NULL
+                       OR s->>'punch_in_at' IS NOT NULL
+                       OR s->>'punch_out_id' IS NOT NULL
+                       OR s->>'punch_out_at' IS NOT NULL)
+              )
+              OR (
+                jsonb_array_length(a.session_records) = 0
+                AND a.status IN ('PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY', 'MISSING_PUNCH', 'CURRENTLY_CHECKED_IN')
+              )
             )
         )::text || ' / ' ||
         COUNT(*) FILTER (
           WHERE a.status NOT IN ('HOLIDAY', 'WEEKLY_OFF', 'NO_SHIFT')
-            AND (
-              jsonb_array_length(a.session_records) >= 1
-              OR EXISTS (
-                SELECT 1 FROM jsonb_array_elements(a.session_records) s
-                WHERE (s->>'session_number')::int = 1
-              )
-            )
         )::text,
         '0 / 0'
       ) AS shift1_summary,
@@ -79,9 +81,12 @@ export async function attendance(q: Query) {
             AND EXISTS (
               SELECT 1 FROM jsonb_array_elements(a.session_records) s
               WHERE (s->>'session_number')::int = 2
-                AND (s->>'status' IN ('COMPLETED', 'PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY')
+                AND (s->>'status' IN ('COMPLETED', 'PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY', 'MISSING_OUT', 'CHECK_OUT_MISSING', 'CURRENTLY_CHECKED_IN')
                      OR (s->>'worked_minutes')::int > 0
-                     OR (s->>'punch_in_id' IS NOT NULL AND s->>'punch_out_id' IS NOT NULL))
+                     OR s->>'punch_in_id' IS NOT NULL
+                     OR s->>'punch_in_at' IS NOT NULL
+                     OR s->>'punch_out_id' IS NOT NULL
+                     OR s->>'punch_out_at' IS NOT NULL)
             )
         )::text || ' / ' ||
         COUNT(*) FILTER (
@@ -122,7 +127,7 @@ export async function attendance(q: Query) {
     SELECT
       COUNT(DISTINCT a.employee_id)::int AS total_employees,
       COUNT(DISTINCT a.employee_id) FILTER (WHERE e.active)::int AS active_employees,
-      COUNT(*) FILTER (WHERE a.status IN ('PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY') OR a.status = 'MISSING_PUNCH')::int AS present,
+      COUNT(*) FILTER (WHERE a.status IN ('PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY', 'CURRENTLY_CHECKED_IN', 'CHECK_OUT_MISSING') OR a.status = 'MISSING_PUNCH')::int AS present,
       COUNT(*) FILTER (WHERE a.status = 'ABSENT')::int AS absent,
       COUNT(*) FILTER (WHERE a.status IN ('LATE', 'LATE_AND_EARLY_EXIT'))::int AS late,
       COUNT(*) FILTER (WHERE a.status = 'MISSING_PUNCH' OR a.session_records @> '[{"missing_punch": true}]'::jsonb)::int AS missing_punches
@@ -180,23 +185,29 @@ function deriveSessionStatusString(dayStatus: string, s?: Record<string, any>): 
   if (!s) {
     if (dayStatus === 'HOLIDAY') return 'Holiday';
     if (dayStatus === 'WEEKLY_OFF') return 'Weekly Off';
+    if (dayStatus === 'NO_SHIFT') return 'No Shift';
     if (dayStatus === 'ABSENT') return 'Absent';
+    if (dayStatus === 'PENDING') return 'Pending';
+    if (dayStatus === 'CHECK_IN_MISSING') return 'Check-in Missing';
     if (dayStatus === 'PRESENT') return 'Present';
+    if (dayStatus === 'LATE') return 'Late';
+    if (dayStatus === 'EARLY_EXIT') return 'Early Exit';
+    if (dayStatus === 'HALF_DAY') return 'Half Day';
     return '—';
   }
   const st = String(s.status || '');
   if (dayStatus === 'HOLIDAY') return 'Holiday';
   if (dayStatus === 'WEEKLY_OFF') return 'Weekly Off';
-  if (st === 'MISSING_IN' || st === 'CHECK_IN_MISSING' || (s.missing_punch && !s.punch_in_id)) return 'Check-in Missing';
-  if (st === 'MISSING_OUT' || (s.missing_punch && !s.punch_out_id)) return 'Check-out Missing';
+  if (dayStatus === 'NO_SHIFT') return 'No Shift';
+  if (st === 'MISSING_IN' || st === 'CHECK_IN_MISSING') return 'Check-in Missing';
+  if (st === 'MISSING_OUT' || st === 'CHECK_OUT_MISSING' || (s.missing_punch && !s.punch_out_id && !s.punch_out_at && (s.punch_in_id || s.punch_in_at))) return 'Check-out Missing';
   if (st === 'LATE_AND_EARLY_EXIT') return 'Late & Early Exit';
   if (st === 'LATE' || Number(s.late_minutes || 0) > 0) return 'Late';
   if (st === 'EARLY_EXIT' || Number(s.early_exit_minutes || 0) > 0) return 'Early Exit';
   if (st === 'HALF_DAY') return 'Half Day';
-  if (st === 'COMPLETED' || st === 'PRESENT' || Number(s.worked_minutes || 0) > 0) return 'Present';
+  if (st === 'COMPLETED' || st === 'PRESENT' || Number(s.worked_minutes || 0) > 0 || s.punch_in_id || s.punch_in_at || s.punch_out_id || s.punch_out_at) return 'Present';
   if (dayStatus === 'ABSENT' || st === 'ABSENT') return 'Absent';
-  if (st === 'PENDING') return 'Pending';
-  if (st === 'NOT_STARTED') return 'Not Started';
+  if (dayStatus === 'PENDING' || st === 'PENDING' || st === 'NOT_STARTED') return 'Pending';
   return st ? st.replaceAll('_', ' ') : '—';
 }
 
@@ -238,33 +249,67 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
     const sessions = Array.isArray(rec.session_records) ? rec.session_records : [];
     const isWorkingDay = !['HOLIDAY', 'WEEKLY_OFF', 'NO_SHIFT'].includes(dayStatus);
 
+    if (!isWorkingDay) continue;
+
     const s1 = sessions.find((x: any) => Number(x.session_number) === 1);
     const s2 = sessions.find((x: any) => Number(x.session_number) === 2);
 
-    if (isWorkingDay && s1) {
-      shift1Summary.expected += 1;
-      const s1Label = deriveSessionStatusString(dayStatus, s1);
-      if (s1Label === 'Present') { shift1Summary.present += 1; shift1Summary.completed += 1; }
-      else if (s1Label === 'Late' || s1Label === 'Late & Early Exit') { shift1Summary.late += 1; shift1Summary.completed += 1; }
-      else if (s1Label === 'Early Exit') { shift1Summary.earlyExit += 1; shift1Summary.completed += 1; }
-      else if (s1Label === 'Half Day') { shift1Summary.halfDay += 1; shift1Summary.completed += 1; }
-      else if (s1Label === 'Check-in Missing') { shift1Summary.checkinMissing += 1; }
-      else if (s1Label === 'Check-out Missing') { shift1Summary.checkoutMissing += 1; }
-      else if (s1Label === 'Pending') { shift1Summary.pending += 1; }
-      else if (s1Label === 'Absent') { shift1Summary.absent += 1; }
+    shift1Summary.expected += 1;
+
+    const isS1Started = s1
+      ? (s1.punch_in_id != null || s1.punch_in_at != null || s1.punch_out_id != null || s1.punch_out_at != null || Number(s1.worked_minutes || 0) > 0 || ['COMPLETED', 'PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY', 'MISSING_OUT', 'CHECK_OUT_MISSING', 'CURRENTLY_CHECKED_IN'].includes(String(s1.status || '')))
+      : ['PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY', 'MISSING_PUNCH', 'CURRENTLY_CHECKED_IN'].includes(dayStatus);
+
+    if (isS1Started) {
+      shift1Summary.completed += 1;
+      shift1Summary.present += 1;
+
+      const s1St = s1 ? String(s1.status || '') : dayStatus;
+      if (s1St === 'LATE' || s1St === 'LATE_AND_EARLY_EXIT' || Number(s1?.late_minutes || 0) > 0) shift1Summary.late += 1;
+      if (s1St === 'EARLY_EXIT' || s1St === 'LATE_AND_EARLY_EXIT' || Number(s1?.early_exit_minutes || 0) > 0) shift1Summary.earlyExit += 1;
+      if (s1St === 'HALF_DAY') shift1Summary.halfDay += 1;
+      if (s1St === 'MISSING_OUT' || s1St === 'CHECK_OUT_MISSING' || (s1?.missing_punch && (s1?.punch_in_id || s1?.punch_in_at) && !s1?.punch_out_id && !s1?.punch_out_at) || (!s1 && dayStatus === 'MISSING_PUNCH')) {
+        shift1Summary.checkoutMissing += 1;
+      }
+    } else {
+      const s1St = s1 ? String(s1.status || '') : dayStatus;
+      if (s1St === 'PENDING' || s1St === 'NOT_STARTED' || dayStatus === 'PENDING') {
+        shift1Summary.pending += 1;
+      } else {
+        shift1Summary.absent += 1;
+        if (s1St === 'MISSING_IN' || s1St === 'CHECK_IN_MISSING' || (s1?.missing_punch && !s1?.punch_in_id && !s1?.punch_in_at) || dayStatus === 'CHECK_IN_MISSING') {
+          shift1Summary.checkinMissing += 1;
+        }
+      }
     }
 
-    if (isWorkingDay && s2) {
+    if (s2) {
       shift2Summary.expected += 1;
-      const s2Label = deriveSessionStatusString(dayStatus, s2);
-      if (s2Label === 'Present') { shift2Summary.present += 1; shift2Summary.completed += 1; }
-      else if (s2Label === 'Late' || s2Label === 'Late & Early Exit') { shift2Summary.late += 1; shift2Summary.completed += 1; }
-      else if (s2Label === 'Early Exit') { shift2Summary.earlyExit += 1; shift2Summary.completed += 1; }
-      else if (s2Label === 'Half Day') { shift2Summary.halfDay += 1; shift2Summary.completed += 1; }
-      else if (s2Label === 'Check-in Missing') { shift2Summary.checkinMissing += 1; }
-      else if (s2Label === 'Check-out Missing') { shift2Summary.checkoutMissing += 1; }
-      else if (s2Label === 'Pending') { shift2Summary.pending += 1; }
-      else if (s2Label === 'Absent') { shift2Summary.absent += 1; }
+
+      const isS2Started = (s2.punch_in_id != null || s2.punch_in_at != null || s2.punch_out_id != null || s2.punch_out_at != null || Number(s2.worked_minutes || 0) > 0 || ['COMPLETED', 'PRESENT', 'LATE', 'EARLY_EXIT', 'LATE_AND_EARLY_EXIT', 'HALF_DAY', 'MISSING_OUT', 'CHECK_OUT_MISSING', 'CURRENTLY_CHECKED_IN'].includes(String(s2.status || '')));
+
+      if (isS2Started) {
+        shift2Summary.completed += 1;
+        shift2Summary.present += 1;
+
+        const s2St = String(s2.status || '');
+        if (s2St === 'LATE' || s2St === 'LATE_AND_EARLY_EXIT' || Number(s2.late_minutes || 0) > 0) shift2Summary.late += 1;
+        if (s2St === 'EARLY_EXIT' || s2St === 'LATE_AND_EARLY_EXIT' || Number(s2.early_exit_minutes || 0) > 0) shift2Summary.earlyExit += 1;
+        if (s2St === 'HALF_DAY') shift2Summary.halfDay += 1;
+        if (s2St === 'MISSING_OUT' || s2St === 'CHECK_OUT_MISSING' || (s2.missing_punch && (s2.punch_in_id || s2.punch_in_at) && !s2.punch_out_id && !s2.punch_out_at)) {
+          shift2Summary.checkoutMissing += 1;
+        }
+      } else {
+        const s2St = String(s2.status || '');
+        if (s2St === 'PENDING' || s2St === 'NOT_STARTED') {
+          shift2Summary.pending += 1;
+        } else {
+          shift2Summary.absent += 1;
+          if (s2St === 'MISSING_IN' || s2St === 'CHECK_IN_MISSING' || (s2.missing_punch && !s2.punch_in_id && !s2.punch_in_at)) {
+            shift2Summary.checkinMissing += 1;
+          }
+        }
+      }
     }
   }
 
@@ -300,7 +345,7 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
   const summarySql = `
     SELECT
       COUNT(*)::int AS total_working_days,
-      COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY') OR a.status = 'MISSING_PUNCH')::int AS present_days,
+      COUNT(*) FILTER (WHERE a.status IN ('PRESENT','LATE','EARLY_EXIT','LATE_AND_EARLY_EXIT','HALF_DAY','CURRENTLY_CHECKED_IN','CHECK_OUT_MISSING') OR a.status = 'MISSING_PUNCH')::int AS present_days,
       COUNT(*) FILTER (WHERE a.status = 'ABSENT')::int AS absent_days,
       COUNT(*) FILTER (WHERE a.status IN ('LATE','LATE_AND_EARLY_EXIT'))::int AS late_days,
       COUNT(*) FILTER (WHERE a.status IN ('EARLY_EXIT','LATE_AND_EARLY_EXIT'))::int AS early_exits,
@@ -323,6 +368,13 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
     totalWorkingDays: Number(s.total_working_days ?? 0),
     presentDays: Number(s.present_days ?? 0),
     absentDays: Number(s.absent_days ?? 0),
+    lateDays: Number(s.late_days ?? 0),
+    earlyExits: Number(s.early_exits ?? 0),
+    holidays: Number(s.holidays ?? 0),
+    weeklyOffs: Number(s.weekly_offs ?? 0),
+    missingPunches: Number(s.missing_punches ?? 0),
+    totalWorkedHours: String(s.total_worked_hours ?? "0.0"),
+    overtimeHours: "0.0",
     shift1: `${shift1Summary.completed} / ${shift1Summary.expected}`,
     shift2: `${shift2Summary.completed} / ${shift2Summary.expected}`,
     shift1Summary,
@@ -344,12 +396,23 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
     const s1 = sessions.find((x: any) => Number(x.session_number) === 1);
     const s2 = sessions.find((x: any) => Number(x.session_number) === 2);
 
+    const lateMins = (Number(s1?.late_minutes || 0)) + (Number(s2?.late_minutes || 0));
+    const earlyMins = (Number(s1?.early_exit_minutes || 0)) + (Number(s2?.early_exit_minutes || 0));
+    const isMissing = dayStatus === 'MISSING_PUNCH' || sessions.some((x: any) => x.missing_punch);
+
     return {
       date: r.date,
       shift: r.shift,
+      first_punch_in: r.first_punch_in || '—',
+      last_punch_out: r.last_punch_out || '—',
+      worked_duration: r.worked_duration,
+      attendance_status: dayStatus,
       shift1_status: deriveSessionStatusString(dayStatus, s1),
       shift2_status: deriveSessionStatusString(dayStatus, s2),
-      worked_duration: r.worked_duration,
+      late_by: lateMins > 0 ? `${lateMins}m` : (['LATE', 'LATE_AND_EARLY_EXIT'].includes(dayStatus) ? '1m' : '—'),
+      early_exit_by: earlyMins > 0 ? `${earlyMins}m` : (['EARLY_EXIT', 'LATE_AND_EARLY_EXIT'].includes(dayStatus) ? '1m' : '—'),
+      overtime: '0m',
+      missing_punch: isMissing,
       notes: r.notes,
       remarks: r.remarks,
     };

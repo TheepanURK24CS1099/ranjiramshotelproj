@@ -158,8 +158,8 @@ describe("Comprehensive Attendance System Verification Suite", () => {
     expect(records.length).toBe(1);
     const rec = records[0]!;
 
-    expect(rec.punch_in).not.toBeNull();
-    expect(rec.punch_out).not.toBeNull();
+    expect(rec.punch_in_at).not.toBeNull();
+    expect(rec.punch_out_at).not.toBeNull();
     expect(rec.working_minutes).toBe(599); // 9h 59m
     expect(rec.status).toBe("LATE"); // Evaluated as LATE (Counts as Present)
     expect(rec.note).toBe("Checkout outside shift window");
@@ -295,8 +295,8 @@ describe("Comprehensive Attendance System Verification Suite", () => {
 
     expect(recNight.status).toBe("LATE"); // 22:05 vs 22:00 (grace 0)
     expect(recNight.working_minutes).toBe(490); // 8h 10m
-    expect(recNight.punch_in).not.toBeNull();
-    expect(recNight.punch_out).not.toBeNull();
+    expect(recNight.punch_in_at).not.toBeNull();
+    expect(recNight.punch_out_at).not.toBeNull();
   });
 
   it("7. Verify Reports and Summaries API endpoints", async () => {

@@ -210,11 +210,11 @@ function getColumnHeader(c: string): string {
   if (c === "shift") return "Shift";
   if (c === "active_status") return "Active Status";
   if (c === "total_working_days") return "Total Days";
-  if (c === "present_days") return "Present Days";
-  if (c === "absent_days") return "Absent Days";
+  if (c === "present_days") return "Present";
+  if (c === "absent_days") return "Absent";
   if (c === "shift1_summary") return "Shift 1";
   if (c === "shift2_summary") return "Shift 2";
-  if (c === "view_report") return "View Report";
+  if (c === "view_report") return "View";
   return c.replaceAll("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
@@ -225,9 +225,11 @@ function renderCell(c: string, row: Record<string, unknown>) {
       <a
         id={`btn-view-report-${row.employee_id}`}
         href={`/reports/attendance/employees/${row.employee_id}`}
-        className="inline-flex min-h-[32px] items-center px-3 py-1 text-xs font-bold text-[#028174] bg-teal-50 border border-teal-200 rounded-lg hover:bg-[#028174] hover:text-white transition-colors focus-visible:outline-2 focus-visible:outline-teal-600"
+        title="View Report"
+        aria-label="View Report"
+        className="inline-flex min-h-[32px] items-center justify-center px-3.5 py-1 text-xs font-bold text-[#028174] bg-teal-50 border border-teal-200 rounded-lg hover:bg-[#028174] hover:text-white transition-colors focus-visible:outline-2 focus-visible:outline-teal-600"
       >
-        View Report
+        View
       </a>
     );
   }
@@ -495,9 +497,9 @@ export default function ReportsPage() {
                 <thead>
                   <tr className="border-b border-slate-200/80 bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     {columns.map((c) => {
-                      const isNumeric = ["total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary"].includes(c);
+                      const isCentered = ["total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary", "view_report"].includes(c);
                       return (
-                        <th className={`px-4 py-3.5 whitespace-nowrap ${isNumeric ? "text-right" : "text-left"}`} key={c}>
+                        <th className={`px-5 py-4 whitespace-nowrap ${isCentered ? "text-center" : "text-left"}`} key={c}>
                           {getColumnHeader(c)}
                         </th>
                       );
@@ -508,9 +510,9 @@ export default function ReportsPage() {
                   {items.map((row, i) => (
                     <tr className="hover:bg-slate-50/70 transition-colors" key={i}>
                       {columns.map((c) => {
-                        const isNumeric = ["total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary"].includes(c);
+                        const isCentered = ["total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary", "view_report"].includes(c);
                         return (
-                          <td className={`px-4 py-3.5 whitespace-nowrap text-slate-700 ${isNumeric ? "text-right font-medium" : "text-left"}`} key={c}>
+                          <td className={`px-5 py-4 whitespace-nowrap text-slate-700 ${isCentered ? "text-center font-medium" : "text-left"}`} key={c}>
                             {renderCell(c, row)}
                           </td>
                         );
