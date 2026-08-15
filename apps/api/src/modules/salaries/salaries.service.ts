@@ -33,3 +33,15 @@ export async function updateSalaryStatus(employeeId: string, salaryId: string, a
   await assertEmployeeExists(employeeId);
   return repository.updateSalaryStatus(employeeId, salaryId, active);
 }
+
+export {
+  calculateEmployeeSalaryForPeriod,
+  calculateEarnedSalary,
+  calculateDailySalaryRate,
+  isFullCalendarMonth,
+  roundMoney,
+  FIXED_SALARY_BASIS_DAYS,
+} from "./salary-calculator.service.js";
+export type { SalaryCalculationPeriodResult } from "./salary-calculator.service.js";
+
+

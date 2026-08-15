@@ -19,6 +19,10 @@ function label(key:string) {
   if (key === "shift1_status") return "Shift 1 Status";
   if (key === "shift2_status") return "Shift 2 Status";
   if (key === "worked_duration") return "Working Hours";
+  if (key === "monthly_salary" || key === "monthlySalary") return "Monthly Salary";
+  if (key === "earned_salary" || key === "earnedSalary") return "Earned Salary";
+  if (key === "advance_balance" || key === "advanceBalance" || key === "advance") return "Advance";
+  if (key === "net_payable" || key === "netPayable" || key === "net_pay") return "Net Pay";
   if (key === "notes" || key === "remarks") return "Remarks";
   return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -37,9 +41,10 @@ function filterText(query:Request["query"]) { const selected=Object.entries(quer
 function pdf(title:string, rows:Record<string,unknown>[], query:Request["query"], reportName?: ReportName) {
   const document=new PDFDocument({layout:"landscape",size:"A4",margin:30,bufferPages:true});const chunks:Buffer[]=[];document.on("data",(chunk:Buffer)=>chunks.push(chunk));
   const isAttendanceSummary = reportName === "attendance-summary" || title.toLowerCase() === "attendance summary";
-  const columns=isAttendanceSummary ? ["employee", "employee_code", "total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary"] : Object.keys(rows[0]??{}).filter(key=>key!=="employee_id");
+  const columns=isAttendanceSummary ? ["employee", "employee_code", "total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary", "monthly_salary", "earned_salary", "advance_balance", "net_payable"] : Object.keys(rows[0]??{}).filter(key=>key!=="employee_id");
   const left=30,right=30,generated=new Intl.DateTimeFormat("en-IN",{dateStyle:"medium",timeZone:"Asia/Kolkata"}).format(new Date());let y=0;
-  const colWidth = (index: number) => { if (!isAttendanceSummary) return (document.page.width - left - right) / Math.max(1, columns.length); const widths = [160, 95, 85, 85, 85, 135, 135]; return widths[index] ?? (document.page.width - left - right) / columns.length; };
+  const colWidth = (index: number) => { if (!isAttendanceSummary) return (document.page.width - left - right) / Math.max(1, columns.length); const widths = [110, 65, 55, 50, 50, 80, 80, 75, 75, 65, 75]; return widths[index] ?? (document.page.width - left - right) / columns.length; };
+
   const alignCell = (col: string) => ["total_working_days", "present_days", "absent_days", "shift1_summary", "shift2_summary"].includes(col) ? "center" : (/(?:minutes|days|count|amount|salary|pay|balance|overtime)/iu.test(col) ? "right" : "left");
   const header=()=>{document.font("Helvetica-Bold").fontSize(12).fillColor("#12304A").text("RANJI RAMS HOTEL",left,28);document.fontSize(8).text("Hotel Management System",left,44);document.fontSize(11).text(`${title} Report`,left,57);document.font("Helvetica").fontSize(7).fillColor("#444").text(`Filters: ${filterText(query)}`,left,73,{width:document.page.width-left-right});document.text(`Generated (IST): ${generated}`,left,84);document.moveTo(left,97).lineTo(document.page.width-right,97).strokeColor("#2C5D7B").stroke();let x=left;document.fillColor("#12304A").font("Helvetica-Bold").fontSize(7);columns.forEach((column,index)=>{const width=colWidth(index);document.text(label(column),x,104,{width:width-3,height:14,ellipsis:true,align:alignCell(column)});x+=width;});document.moveTo(left,120).lineTo(document.page.width-right,120).strokeColor("#999").stroke();document.font("Helvetica").fillColor("#111");y=124;};header();
   if(!rows.length)document.text("No matching records.",left,y);for(const row of rows){const cells=columns.map(column=>{const cellVal=column==="overtime"?(row.overtime_minutes??row.overtime??row.overtime_hours??0):row[column];return value(column,cellVal);});const height=Math.max(18,...cells.map((cell,index)=>document.heightOfString(cell,{width:colWidth(index)-4})))+6;if(y+height>document.page.height-38){document.addPage();header();}let x=left;cells.forEach((cell,index)=>{const width=colWidth(index);document.text(cell,x,y+3,{width:width-4,height:height-4,align:alignCell(columns[index]!)});x+=width;});document.moveTo(left,y+height).lineTo(document.page.width-right,y+height).strokeColor("#ddd").stroke();y+=height;}
@@ -95,9 +100,29 @@ function employeePdf(data: any, query: Request["query"]) {
   y += 14;
   document.font("Helvetica").fontSize(7.5).fillColor("#333");
   document.text(`Present: ${s2.present ?? 0}  |  Late: ${s2.late ?? 0}  |  Early Exit: ${s2.earlyExit ?? 0}  |  Absent: ${s2.absent ?? 0}  |  Half Day: ${s2.halfDay ?? 0}  |  Check-in Missing: ${s2.checkinMissing ?? 0}  |  Check-out Missing: ${s2.checkoutMissing ?? 0}  |  Pending: ${s2.pending ?? 0}`, left, y);
-  y += 24;
+  y += 20;
+
+  // Salary Summary Section
+  const sal = data.salarySummary || {};
+  const fmt = (v: any) => `₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v ?? 0))}`;
+  document.font("Helvetica-Bold").fontSize(9).fillColor("#12304A").text("Salary Summary", left, y);
+  y += 14;
+  document.font("Helvetica").fontSize(7.5).fillColor("#333");
+  document.text(
+    `Monthly Salary: ${fmt(sal.monthlySalary)}  |  Basis: 30 days  |  Daily Salary: ${fmt(sal.dailySalary)}  |  Present Salary Days: ${sal.presentSalaryDays ?? 0}  |  Absent Salary Days: ${sal.absentSalaryDays ?? 0}`,
+    left,
+    y,
+  );
+  y += 12;
+  document.text(
+    `Absence Deduction: ${fmt(sal.absenceDeduction)}  |  Earned Salary: ${fmt(sal.earnedSalary)}  |  Advance: ${fmt(sal.advance ?? sal.advanceBalance)}  |  Net Payable: ${fmt(sal.netPayable)}`,
+    left,
+    y,
+  );
+  y += 20;
 
   // Daily Breakdown Table Header
+
   document.font("Helvetica-Bold").fontSize(9).fillColor("#12304A").text("Daily Breakdown", left, y);
   y += 16;
 
@@ -160,7 +185,8 @@ function employeePdf(data: any, query: Request["query"]) {
 }
 
 export async function get(req:Request,res:Response){try{res.json(await reports.report(name(req),req.query));}catch(e){error(res,e)}}
-export async function exportReport(req:Request,res:Response){try{const report=await reports.report(name(req),{...req.query,page:1,limit:100});const title=name(req).replaceAll('-',' ');const keys=name(req)==='attendance-summary'?["employee","employee_code","present_days","absent_days","shift1_summary","shift2_summary"]:undefined;if(req.params.format==='csv')res.type('text/csv; charset=utf-8').attachment(`${name(req)}.csv`).send(csv(report.items as Record<string,unknown>[],keys,true));else res.type('application/pdf').set('Content-Disposition',`inline; filename=${name(req)}.pdf`).send(await pdf(title,report.items as Record<string,unknown>[],req.query,name(req)));}catch(e){error(res,e)}}
+export async function exportReport(req:Request,res:Response){try{const report=await reports.report(name(req),{...req.query,page:1,limit:100});const title=name(req).replaceAll('-',' ');const keys=name(req)==='attendance-summary'?["employee","employee_code","total_working_days","present_days","absent_days","shift1_summary","shift2_summary","monthly_salary","earned_salary","advance_balance","net_payable"]:undefined;if(req.params.format==='csv')res.type('text/csv; charset=utf-8').attachment(`${name(req)}.csv`).send(csv(report.items as Record<string,unknown>[],keys,true));else res.type('application/pdf').set('Content-Disposition',`inline; filename=${name(req)}.pdf`).send(await pdf(title,report.items as Record<string,unknown>[],req.query,name(req)));}catch(e){error(res,e)}}
+
 
 export async function getEmployeeAttendance(req:Request,res:Response){try{res.json(await reports.employeeAttendanceDetail(String(req.params.employeeId??''),req.query));}catch(e){error(res,e)}}
 export async function exportEmployeeAttendance(req:Request,res:Response){try{const empId=String(req.params.employeeId??'');const data=await reports.employeeAttendanceDetail(empId,{...req.query,page:1,limit:366});const emp=data.employee as Record<string,unknown>;if(req.params.format==='csv')res.type('text/csv; charset=utf-8').attachment(`attendance-${empId}.csv`).send(csv(data.items as Record<string,unknown>[], ["date", "attendance_status", "shift1_status", "shift2_status", "worked_duration", "remarks"], false));else res.type('application/pdf').set('Content-Disposition',`inline; filename=attendance-${empId}.pdf`).send(await employeePdf(data,req.query));}catch(e){error(res,e)}}

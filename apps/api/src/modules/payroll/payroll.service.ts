@@ -17,23 +17,112 @@ export async function createReplacement(id:string,userId:string){
 
 async function period(id:string){return getPeriod(id) as Promise<{id:string;period_start:string;period_end:string;status:string}>;}
 async function deductions(recordId:string){return (await pool.query("SELECT * FROM payroll_deductions WHERE payroll_record_id=$1 ORDER BY created_at",[recordId])).rows;}
+import { calculateEmployeeSalaryForPeriod } from "../salaries/salary-calculator.service.js";
+
 async function recalcRecord(p:{id:string;period_start:string;period_end:string;status:string}, employee:{id:string;joining_date:string|null}, salary:any, existing:any){
- const attendance=(await pool.query(`SELECT status,count(*)::int count,coalesce(sum(working_minutes),0)::int work FROM daily_attendance_records WHERE employee_id=$1 AND attendance_date BETWEEN $2 AND $3 GROUP BY status`,[employee.id,p.period_start,p.period_end])).rows;
- const counts:Record<string,number>={};let work=0; for(const a of attendance){counts[a.status]=n(a.count??1);work+=n(a.work);}
- // Query rows rather than raw punches; missing calendar dates are treated as absence only within employment/salary eligibility.
- const joined=employee.joining_date&&employee.joining_date>p.period_start?employee.joining_date:p.period_start;
- const calendar=Math.floor((Date.parse(`${p.period_end}T00:00:00Z`)-Date.parse(`${joined}T00:00:00Z`))/86400000)+1;
- const present=(counts.PRESENT??0),late=(counts.LATE??0),early=(counts.EARLY_EXIT??0),lateEarly=(counts.LATE_AND_EARLY_EXIT??0),half=(counts.HALF_DAY??0),weekly=(counts.WEEKLY_OFF??0),holiday=(counts.HOLIDAY??0),missing=(counts.MISSING_PUNCH??0),noShift=(counts.NO_SHIFT??0),unmatched=(counts.UNMATCHED??0);
- const recorded=present+late+early+lateEarly+half+weekly+holiday+missing+noShift+unmatched+(counts.ABSENT??0); const absent=Math.max(counts.ABSENT??0,Math.max(0,calendar-recorded)); const payable=present+late+early+lateEarly+missing+half*.5+weekly+holiday;
- const base=n(salary.monthly_salary??salary.daily_rate??salary.hourly_rate); let attendanceDeduction=0,gross=0;
- if(salary.salary_type==="MONTHLY"){const daily=base/(new Date(Date.UTC(Number(p.period_start.slice(0,4)),Number(p.period_start.slice(5,7)),0)).getUTCDate());attendanceDeduction=money(daily*Math.max(0,calendar-payable));gross=money(base);}
- if(salary.salary_type==="DAILY")gross=money(payable*base);
- if(salary.salary_type==="HOURLY")gross=money((work/60)*base);
- const ds=existing?await deductions(existing.id):[]; const other=money(ds.reduce((s,d)=>s+n(d.amount),0)); const recovery=n(existing?.advance_recovery); const net=money(Math.max(0,gross-attendanceDeduction-other-recovery)); const details={method:"calendar-day proration",calendar_days:new Date(Date.UTC(Number(p.period_start.slice(0,4)),Number(p.period_start.slice(5,7)),0)).getUTCDate(),eligible_employment_days:calendar,payable_day_equivalent:payable,total_work_minutes:work,early_exit_days:early,late_and_early_exit_days:lateEarly,no_shift_days:noShift,unmatched_days:unmatched,unpaid_balance:money(Math.max(0,attendanceDeduction+other+recovery-gross))};
- const vals=[p.id,employee.id,salary.id,salary.salary_type,money(base),payable,present,late,half,absent,weekly,holiday,missing,work,attendanceDeduction,other,recovery,gross,net,JSON.stringify(details)];
- if(existing) return (await pool.query(`UPDATE employee_payroll_records SET salary_history_id=$1,salary_type=$2,base_salary=$3,payable_days=$4,present_days=$5,late_days=$6,half_days=$7,absent_days=$8,weekly_off_days=$9,holiday_days=$10,missing_punch_days=$11,total_work_minutes=$12,attendance_deduction=$13,other_deductions=$14,advance_recovery=$15,gross_pay=$16,net_pay=$17,calculation_details=$18 WHERE id=$19 RETURNING *`,[...vals.slice(2),existing.id])).rows[0];
- return (await pool.query(`INSERT INTO employee_payroll_records(payroll_period_id,employee_id,salary_history_id,salary_type,base_salary,payable_days,present_days,late_days,half_days,absent_days,weekly_off_days,holiday_days,missing_punch_days,total_work_minutes,attendance_deduction,other_deductions,advance_recovery,gross_pay,net_pay,calculation_details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,vals)).rows[0];
+ const salCalc = await calculateEmployeeSalaryForPeriod(employee.id, p.period_start, p.period_end);
+
+ const base = salCalc.salaryRecord
+   ? n(salCalc.salaryRecord.monthlySalary || salCalc.salaryRecord.dailyRate || salCalc.salaryRecord.hourlyRate)
+   : n(salary?.monthly_salary ?? salary?.daily_rate ?? salary?.hourly_rate);
+
+ const salaryType = salCalc.salaryRecord ? salCalc.salaryRecord.salaryType : (salary?.salary_type ?? "MONTHLY");
+ const salaryHistoryId = salCalc.salaryRecord?.id ?? salary?.id ?? null;
+
+ const payable = salCalc.presentSalaryDays;
+ const present = salCalc.attendanceCounts.present;
+ const late = salCalc.attendanceCounts.late + salCalc.attendanceCounts.lateAndEarlyExit;
+ const half = salCalc.attendanceCounts.halfDay;
+ const absent = salCalc.absentSalaryDays;
+ const weekly = salCalc.attendanceCounts.weeklyOff;
+ const holiday = salCalc.attendanceCounts.holiday;
+ const missing = salCalc.attendanceCounts.missingPunch;
+ const work = salCalc.attendanceCounts.totalWorkMinutes;
+ const early = salCalc.attendanceCounts.earlyExit;
+ const lateEarly = salCalc.attendanceCounts.lateAndEarlyExit;
+ const noShift = salCalc.attendanceCounts.noShift;
+ const unmatched = salCalc.attendanceCounts.unmatched;
+
+ const attendanceDeduction = salCalc.absenceDeduction;
+
+ let gross = 0;
+ if (salaryType === "MONTHLY" && salCalc.isFullMonth && !salCalc.hasSalaryRevisions) {
+   gross = money(base);
+ } else {
+   gross = money(salCalc.earnedSalary + salCalc.absenceDeduction);
+ }
+
+
+ const ds = existing ? await deductions(existing.id) : [];
+ const other = money(ds.reduce((s, d) => s + n(d.amount), 0));
+
+ let recovery = 0;
+ if (existing && existing.advance_recovery !== undefined && existing.advance_recovery !== null) {
+   recovery = n(existing.advance_recovery);
+ } else {
+   recovery = money(Math.min(salCalc.advanceBalance, Math.max(0, gross - attendanceDeduction - other)));
+ }
+
+ const net = money(Math.max(0, gross - attendanceDeduction - other - recovery));
+
+ const details = {
+   method: "fixed-30-day-basis",
+   salary_basis_days: 30,
+   daily_salary_rate: salCalc.dailySalaryRate,
+   present_salary_days: salCalc.presentSalaryDays,
+   absent_salary_days: salCalc.absentSalaryDays,
+   is_full_month: salCalc.isFullMonth,
+   has_salary_revisions: salCalc.hasSalaryRevisions,
+   eligible_employment_days: salCalc.eligibleCalendarDays,
+   payable_day_equivalent: payable,
+   total_work_minutes: work,
+   early_exit_days: early,
+   late_and_early_exit_days: lateEarly,
+   no_shift_days: noShift,
+   unmatched_days: unmatched,
+   unpaid_balance: money(Math.max(0, attendanceDeduction + other + recovery - gross)),
+ };
+
+ const vals = [
+   p.id,
+   employee.id,
+   salaryHistoryId,
+   salaryType,
+   money(base),
+   payable,
+   present,
+   late,
+   half,
+   absent,
+   weekly,
+   holiday,
+   missing,
+   work,
+   attendanceDeduction,
+   other,
+   recovery,
+   gross,
+   net,
+   JSON.stringify(details),
+ ];
+
+ if (existing) {
+   return (
+     await pool.query(
+       `UPDATE employee_payroll_records SET salary_history_id=$1,salary_type=$2,base_salary=$3,payable_days=$4,present_days=$5,late_days=$6,half_days=$7,absent_days=$8,weekly_off_days=$9,holiday_days=$10,missing_punch_days=$11,total_work_minutes=$12,attendance_deduction=$13,other_deductions=$14,advance_recovery=$15,gross_pay=$16,net_pay=$17,calculation_details=$18 WHERE id=$19 RETURNING *`,
+       [...vals.slice(2), existing.id]
+     )
+   ).rows[0];
+ }
+
+ return (
+   await pool.query(
+     `INSERT INTO employee_payroll_records(payroll_period_id,employee_id,salary_history_id,salary_type,base_salary,payable_days,present_days,late_days,half_days,absent_days,weekly_off_days,holiday_days,missing_punch_days,total_work_minutes,attendance_deduction,other_deductions,advance_recovery,gross_pay,net_pay,calculation_details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
+     vals
+   )
+ ).rows[0];
 }
+
 export async function generate(id:string,userId:string,recalculateExisting=false){const p=await period(id);if(["APPROVED","PAID","LOCKED","CANCELLED"].includes(p.status))throw new Error("Validation: This payroll period cannot be generated");const employees=(await pool.query("SELECT id,joining_date::text,active FROM employees WHERE joining_date IS NULL OR joining_date <= $1",[p.period_end])).rows;let created=0,updated=0,eligibleEmployeeCount=0;const skippedEmployees:{employee_id:string;reason:string}[]=[];for(const e of employees){if(!e.active){skippedEmployees.push({employee_id:e.id,reason:"INACTIVE_EMPLOYEE"});continue;}const salary=(await pool.query("SELECT * FROM employee_salary_history WHERE employee_id=$1 AND active AND effective_from <= $3::date AND (effective_to IS NULL OR effective_to >= $2::date) ORDER BY effective_from DESC LIMIT 1",[e.id,p.period_start,p.period_end])).rows[0];if(!salary){skippedEmployees.push({employee_id:e.id,reason:"NO_ACTIVE_SALARY"});continue;}const amount=n(salary.salary_type==="MONTHLY"?salary.monthly_salary:salary.salary_type==="DAILY"?salary.daily_rate:salary.hourly_rate);if(!Number.isFinite(amount)||amount<=0){skippedEmployees.push({employee_id:e.id,reason:"INVALID_SALARY"});continue;}eligibleEmployeeCount++;const existing=(await pool.query("SELECT * FROM employee_payroll_records WHERE payroll_period_id=$1 AND employee_id=$2",[id,e.id])).rows[0];if(existing){if(recalculateExisting&&existing.status!=="PAID"&&existing.status!=="CANCELLED"){await recalcRecord(p,e,salary,existing);updated++;}else skippedEmployees.push({employee_id:e.id,reason:"ALREADY_GENERATED"});continue;}await recalcRecord(p,e,salary,undefined);created++;}await pool.query("UPDATE payroll_periods SET status='GENERATED',generated_at=coalesce(generated_at,now()),generated_by=$2 WHERE id=$1",[id,userId]);return {eligibleEmployeeCount,generatedCount:created,updatedCount:updated,skippedCount:skippedEmployees.length,skippedEmployees,created,updated,skipped_employee_ids:skippedEmployees.map((employee)=>employee.employee_id)};}
 export async function recalculate(id:string,userId:string){const p=await period(id);if(p.status==="LOCKED"||p.status==="CANCELLED")throw new Error("Validation: This payroll period cannot be recalculated");return generate(id,userId,true);}
 export async function listRecords(id:string){await period(id);return (await pool.query(`SELECT r.*,e.name employee_name,e.biometric_id FROM employee_payroll_records r JOIN employees e ON e.id=r.employee_id WHERE r.payroll_period_id=$1 ORDER BY e.name`,[id])).rows;}

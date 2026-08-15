@@ -1,9 +1,9 @@
 import * as repository from "./attendance.repository.js";
 import type { AttendanceDashboardSummary, AttendanceException, AttendanceFilters, AttendanceRecord, AttendanceStatus } from "./attendance.repository.js";
 import { getDatabasePool } from "../../infrastructure/database/database.js";
+import { calculateEmployeeSalaryForPeriod } from "../salaries/salary-calculator.service.js";
 
 const pool = getDatabasePool();
-
 const IST_OFFSET_MS = 330 * 60_000;
 
 function currentIstDate(): string {
@@ -11,8 +11,54 @@ function currentIstDate(): string {
 }
 
 export async function getAttendance(filters: AttendanceFilters): Promise<AttendanceRecord[]> {
-  return await repository.listAttendance(filters);
+
+  const records = await repository.listAttendance(filters);
+  const dateStr = filters.date ?? currentIstDate();
+  const yearMonth = dateStr.slice(0, 7);
+  const monthStart = `${yearMonth}-01`;
+  const [yStr, mStr] = yearMonth.split("-");
+  const lastDay = new Date(Number(yStr), Number(mStr), 0).getDate();
+  const monthEnd = `${yearMonth}-${String(lastDay).padStart(2, "0")}`;
+
+  const enriched = await Promise.all(
+    records.map(async (r) => {
+      if (!r.employee_id) {
+        return {
+          ...r,
+          monthly_salary: 0,
+          earned_salary: 0,
+          advance_balance: 0,
+          net_payable: 0,
+          monthlySalary: 0,
+          earnedSalary: 0,
+          advanceBalance: 0,
+          netPayable: 0,
+        };
+      }
+
+      const salCalc = await calculateEmployeeSalaryForPeriod(r.employee_id, monthStart, monthEnd);
+      const monthlySalary = salCalc.salaryRecord ? salCalc.salaryRecord.monthlySalary : 0;
+      const earnedSalary = salCalc.earnedSalary;
+      const advanceBalance = salCalc.advanceBalance;
+      const netPayable = salCalc.netPayableSalary;
+
+      return {
+        ...r,
+        monthly_salary: monthlySalary,
+        earned_salary: earnedSalary,
+        advance_balance: advanceBalance,
+        net_payable: netPayable,
+        monthlySalary,
+        earnedSalary,
+        advanceBalance,
+        netPayable,
+      };
+    })
+  );
+
+  return enriched as unknown as AttendanceRecord[];
 }
+
 
 export async function getAttendanceExceptions(date: string): Promise<AttendanceException[]> {
   return await repository.listAttendanceExceptions(date);

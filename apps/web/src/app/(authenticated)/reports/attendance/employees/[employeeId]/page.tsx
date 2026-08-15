@@ -47,12 +47,30 @@ type Summary = {
   shift2Summary: ShiftSummaryDetail;
 };
 
+type SalarySummary = {
+  monthlySalary: number;
+  salaryBasis: string;
+  salaryBasisDays: number;
+  dailySalary: number;
+  presentSalaryDays: number;
+  absentSalaryDays: number;
+  absenceDeduction: number;
+  earnedSalary: number;
+  advance: number;
+  advanceDeduction: number;
+  advanceBalance: number;
+  netPayable: number;
+  isFullMonth?: boolean;
+};
+
 type ReportData = {
   employee: EmployeeHeader;
   summary: Summary;
+  salarySummary?: SalarySummary;
   items: DailyRow[];
   pagination: { page: number; limit: number; total: number; pages: number };
 };
+
 
 function getStatusBadgeClass(status: string) {
   if (status === "Present") return "bg-emerald-50 text-emerald-800 border-emerald-300";
@@ -285,6 +303,64 @@ export default function EmployeeAttendanceReportPage() {
           </div>
         </div>
       )}
+
+      {/* Salary Summary Section */}
+      {data?.salarySummary && (
+        <div id="salary-summary-card" className="rounded-2xl border border-teal-200 bg-white p-5 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="text-sm font-bold text-[#028174] uppercase tracking-wider flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#028174]" />
+              Salary Summary
+            </h2>
+            <span className="text-xs font-bold text-teal-800 bg-teal-50 px-3 py-1 rounded-lg border border-teal-200">
+              Basis: 30 days
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-9 gap-3">
+            <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-3">
+              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Monthly Salary</div>
+              <div className="text-sm font-extrabold text-slate-900 mt-1">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(data.salarySummary.monthlySalary ?? 0)}`}</div>
+            </div>
+
+            <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-3">
+              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Daily Salary</div>
+              <div className="text-sm font-extrabold text-slate-900 mt-1">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(data.salarySummary.dailySalary ?? 0)}`}</div>
+            </div>
+
+            <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-3">
+              <div className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider">Present Days</div>
+              <div className="text-sm font-extrabold text-emerald-900 mt-1">{data.salarySummary.presentSalaryDays ?? 0}</div>
+            </div>
+
+            <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-3">
+              <div className="text-[11px] font-semibold text-rose-800 uppercase tracking-wider">Absent Days</div>
+              <div className="text-sm font-extrabold text-rose-900 mt-1">{data.salarySummary.absentSalaryDays ?? 0}</div>
+            </div>
+
+            <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-3">
+              <div className="text-[11px] font-semibold text-rose-800 uppercase tracking-wider">Absence Deduction</div>
+              <div className="text-sm font-extrabold text-rose-900 mt-1">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(data.salarySummary.absenceDeduction ?? 0)}`}</div>
+            </div>
+
+            <div className="bg-teal-50/60 border border-teal-200/80 rounded-xl p-3">
+              <div className="text-[11px] font-semibold text-teal-800 uppercase tracking-wider">Earned Salary</div>
+              <div className="text-sm font-extrabold text-teal-900 mt-1">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(data.salarySummary.earnedSalary ?? 0)}`}</div>
+            </div>
+
+            <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3">
+              <div className="text-[11px] font-semibold text-amber-800 uppercase tracking-wider">Advance</div>
+              <div className="text-sm font-extrabold text-amber-900 mt-1">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(data.salarySummary.advance ?? data.salarySummary.advanceBalance ?? 0)}`}</div>
+            </div>
+
+            <div className="bg-emerald-600 border border-emerald-700 rounded-xl p-3 text-white col-span-2 sm:col-span-1 lg:col-span-2">
+              <div className="text-[11px] font-bold text-emerald-100 uppercase tracking-wider">Net Payable</div>
+              <div className="text-base font-extrabold text-white mt-0.5">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(data.salarySummary.netPayable ?? 0)}`}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Shift 1 & Shift 2 Summary Cards Breakdown */}
       {summary && (
