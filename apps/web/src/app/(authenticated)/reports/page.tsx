@@ -200,6 +200,10 @@ const ATTENDANCE_SUMMARY_COLUMNS = [
   "absent_days",
   "shift1_summary",
   "shift2_summary",
+  "monthly_salary",
+  "earned_salary",
+  "advance_balance",
+  "net_payable",
   "view_report",
 ];
 
@@ -214,9 +218,14 @@ function getColumnHeader(c: string): string {
   if (c === "absent_days") return "Absent";
   if (c === "shift1_summary") return "Shift 1";
   if (c === "shift2_summary") return "Shift 2";
+  if (c === "monthly_salary" || c === "monthlySalary") return "Monthly Salary";
+  if (c === "earned_salary" || c === "earnedSalary") return "Earned Salary";
+  if (c === "advance_balance" || c === "advanceBalance") return "Advance";
+  if (c === "net_payable" || c === "netPayable") return "Net Pay";
   if (c === "view_report") return "View";
   return c.replaceAll("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
+
 
 function renderCell(c: string, row: Record<string, unknown>) {
   const val = row[c];
@@ -237,6 +246,12 @@ function renderCell(c: string, row: Record<string, unknown>) {
   if (c === "shift1_summary" || c === "shift2_summary") {
     return <span className="font-semibold text-slate-900">{String(val ?? "0 / 0")}</span>;
   }
+
+  if (["monthly_salary", "earned_salary", "advance_balance", "net_payable", "monthlySalary", "earnedSalary", "advanceBalance", "netPayable"].includes(c)) {
+    const num = Number(val ?? 0);
+    return <span className="font-semibold text-slate-900">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)}`}</span>;
+  }
+
 
   if (val === null || val === undefined) return <span className="text-slate-400">—</span>;
 

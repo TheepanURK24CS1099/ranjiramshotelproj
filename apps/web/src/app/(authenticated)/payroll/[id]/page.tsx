@@ -9,7 +9,8 @@ import { usePayrollModule } from "@/components/payroll-module-context";
 import { apiClient } from "@/lib/api-client";
 
 const inr = (v: unknown) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(v ?? 0));
+  `₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v ?? 0))}`;
+
 
 export default function PayrollDetail() {
   const { id } = useParams<{ id: string }>();
@@ -163,7 +164,9 @@ export default function PayrollDetail() {
                 )}
                 <th className="px-6 py-4">Employee Name</th>
                 <th className="px-6 py-4 text-right">Base Salary</th>
-                <th className="px-6 py-4 text-right">Gross Pay</th>
+                <th className="px-6 py-4 text-right">Earned Salary</th>
+                <th className="px-6 py-4 text-right">Absence Deduction</th>
+                <th className="px-6 py-4 text-right">Advance Recovery</th>
                 <th className="px-6 py-4 text-right">Net Pay</th>
                 <th className="px-6 py-4">Status</th>
               </tr>
@@ -171,6 +174,7 @@ export default function PayrollDetail() {
             <tbody className="divide-y divide-slate-100">
               {records.map((r) => {
                 const isChecked = selectedRecords.includes(r.id);
+                const earnedSalary = Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0);
                 return (
                   <tr key={r.id} className={`transition-colors hover:bg-slate-50/60 ${isChecked ? "bg-teal-50/40" : ""}`}>
                     {canReset && (
@@ -190,7 +194,9 @@ export default function PayrollDetail() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-slate-700">{inr(r.base_salary)}</td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-900">{inr(r.gross_pay)}</td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-900">{inr(earnedSalary)}</td>
+                    <td className="px-6 py-4 text-right font-medium text-rose-700">{r.attendance_deduction > 0 ? `-${inr(r.attendance_deduction)}` : inr(0)}</td>
+                    <td className="px-6 py-4 text-right font-medium text-amber-700">{r.advance_recovery > 0 ? `-${inr(r.advance_recovery)}` : inr(0)}</td>
                     <td className="px-6 py-4 text-right font-bold text-[#028174]">{inr(r.net_pay)}</td>
                     <td className="px-6 py-4">
                       <span className="inline-flex rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-800">
@@ -203,7 +209,7 @@ export default function PayrollDetail() {
 
               {records.length === 0 && (
                 <tr>
-                  <td colSpan={canReset ? 6 : 5} className="px-6 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={canReset ? 8 : 7} className="px-6 py-8 text-center text-sm text-slate-500">
                     No employee payroll records found for this period.
                   </td>
                 </tr>
@@ -216,6 +222,7 @@ export default function PayrollDetail() {
         <div className="block md:hidden divide-y divide-slate-100">
           {records.map((r) => {
             const isChecked = selectedRecords.includes(r.id);
+            const earnedSalary = Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0);
             return (
               <div key={r.id} className={`p-4 space-y-2 ${isChecked ? "bg-teal-50/40" : ""}`}>
                 <div className="flex items-start justify-between gap-2">
@@ -238,23 +245,32 @@ export default function PayrollDetail() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-2.5 text-xs">
+                <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2.5 text-xs">
                   <div>
                     <span className="text-slate-500 block">Base Salary:</span>
                     <span className="font-semibold text-slate-800">{inr(r.base_salary)}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Gross Pay:</span>
-                    <span className="font-semibold text-slate-900">{inr(r.gross_pay)}</span>
+                    <span className="text-slate-500 block">Earned Salary:</span>
+                    <span className="font-semibold text-slate-900">{inr(earnedSalary)}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Net Pay:</span>
-                    <span className="font-bold text-[#028174]">{inr(r.net_pay)}</span>
+                    <span className="text-slate-500 block">Absence Deduction:</span>
+                    <span className="font-semibold text-rose-700">{r.attendance_deduction > 0 ? `-${inr(r.attendance_deduction)}` : inr(0)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Advance Recovery:</span>
+                    <span className="font-semibold text-amber-700">{r.advance_recovery > 0 ? `-${inr(r.advance_recovery)}` : inr(0)}</span>
+                  </div>
+                  <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
+                    <span className="text-[#028174] font-bold">Net Pay:</span>
+                    <span className="font-bold text-[#028174] text-sm">{inr(r.net_pay)}</span>
                   </div>
                 </div>
               </div>
             );
           })}
+
 
           {records.length === 0 && (
             <div className="p-6 text-center text-sm text-slate-500">

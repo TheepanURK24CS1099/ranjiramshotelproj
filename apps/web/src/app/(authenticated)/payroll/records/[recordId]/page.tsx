@@ -201,21 +201,82 @@ export default function RecordDetail() {
         </div>
       </section>
 
-      {/* Section 2: Attendance Summary and Calculation Details */}
-      <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-3">
-        <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-          <svg className="h-5 w-5 text-[#028174]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
-          Attendance Summary & Calculation Formula
-        </h2>
-        <p className="text-xs text-slate-600">
-          Monthly salary uses calendar-day proration; present/late/early exit/weekly off/holiday are paid, half day is 0.5, missing punch is unpaid.
-        </p>
-        <pre className="overflow-auto rounded-xl bg-slate-900 p-4 text-xs font-mono text-slate-100 max-h-72">
-          {JSON.stringify(r.calculation_details, null, 2)}
-        </pre>
+      {/* Section 2: Salary Breakdown & Calculation Summary */}
+      <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <svg className="h-5 w-5 text-[#028174]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            Salary Calculation Breakdown
+          </h2>
+          <span className="text-xs font-semibold text-[#028174] bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200">
+            Fixed 30-Day Basis
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <span className="text-slate-500 block">Monthly Salary</span>
+            <span className="text-sm font-bold text-slate-900">{inr(r.base_salary)}</span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <span className="text-slate-500 block">Salary Basis</span>
+            <span className="text-sm font-bold text-slate-900">30 Days</span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <span className="text-slate-500 block">Daily Rate (Base / 30)</span>
+            <span className="text-sm font-bold text-slate-900">{inr(Number(r.base_salary ?? 0) / 30)}</span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <span className="text-slate-500 block">Present Salary Days</span>
+            <span className="text-sm font-bold text-emerald-700">{r.payable_days ?? 0}</span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <span className="text-slate-500 block">Absent Salary Days</span>
+            <span className="text-sm font-bold text-rose-700">{r.absent_days ?? 0}</span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <span className="text-slate-500 block">Half Days</span>
+            <span className="text-sm font-bold text-amber-700">{r.half_days ?? 0}</span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <span className="text-slate-500 block">Absence Deduction</span>
+            <span className="text-sm font-bold text-rose-700">{Number(r.attendance_deduction ?? 0) > 0 ? `-${inr(r.attendance_deduction)}` : inr(0)}</span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <span className="text-slate-500 block">Earned Salary</span>
+            <span className="text-sm font-bold text-slate-900">{inr(Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0))}</span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <span className="text-slate-500 block">Advance Recovery</span>
+            <span className="text-sm font-bold text-amber-700">{Number(r.advance_recovery ?? 0) > 0 ? `-${inr(r.advance_recovery)}` : inr(0)}</span>
+          </div>
+
+          <div className="rounded-xl border border-teal-300 bg-teal-50 p-3 col-span-2 sm:col-span-1">
+            <span className="text-[#028174] font-bold block">Net Pay</span>
+            <span className="text-sm font-extrabold text-[#028174]">{inr(r.net_pay)}</span>
+          </div>
+        </div>
+
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer font-semibold text-slate-600 hover:text-slate-900">
+            View Calculation Metadata Details (JSON)
+          </summary>
+          <pre className="mt-2 overflow-auto rounded-xl bg-slate-900 p-4 text-xs font-mono text-slate-100 max-h-48">
+            {JSON.stringify(r.calculation_details, null, 2)}
+          </pre>
+        </details>
       </section>
+
 
       {/* Section 3: Deductions */}
       <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-4">

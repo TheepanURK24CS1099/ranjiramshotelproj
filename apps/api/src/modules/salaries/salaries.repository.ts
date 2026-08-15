@@ -41,6 +41,30 @@ export async function getCurrentSalary(employeeId: string, date: string): Promis
   return result.rows[0] ?? null;
 }
 
+export async function getEffectiveSalaryForPeriod(employeeId: string, fromDate: string, toDate: string): Promise<SalaryRecord | null> {
+  const result = await pool.query<SalaryRecord>(
+    `SELECT id,employee_id,salary_type,monthly_salary,daily_rate,hourly_rate,effective_from::text,effective_to::text,active,notes,created_at,updated_at
+     FROM employee_salary_history
+     WHERE employee_id=$1 AND active=true AND effective_from <= $3::date AND (effective_to IS NULL OR effective_to >= $2::date)
+     ORDER BY effective_from DESC LIMIT 1`,
+    [employeeId, fromDate, toDate],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function getEffectiveSalariesForPeriod(employeeId: string, fromDate: string, toDate: string): Promise<SalaryRecord[]> {
+  const result = await pool.query<SalaryRecord>(
+    `SELECT id,employee_id,salary_type,monthly_salary,daily_rate,hourly_rate,effective_from::text,effective_to::text,active,notes,created_at,updated_at
+     FROM employee_salary_history
+     WHERE employee_id=$1 AND active=true AND effective_from <= $3::date AND (effective_to IS NULL OR effective_to >= $2::date)
+     ORDER BY effective_from ASC`,
+    [employeeId, fromDate, toDate],
+  );
+  return result.rows;
+}
+
+
+
 export async function createSalary(employeeId: string, input: CreateSalaryInput): Promise<SalaryRecord> {
   const client = await pool.connect();
   try {

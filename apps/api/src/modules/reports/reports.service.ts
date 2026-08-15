@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDatabasePool } from "../../infrastructure/database/database.js";
+import { calculateEmployeeSalaryForPeriod } from "../salaries/salary-calculator.service.js";
+
 
 const pool = getDatabasePool();
 const MAX_DAYS = 366;
@@ -178,8 +179,35 @@ export async function attendance(q: Query) {
     historicalUnmatchedIds: unmatchedResult.rows[0]?.historical_unmatched_ids || 0
   };
 
-  return result(rows.rows, Number(count.rows[0]?.total ?? 0), q, summary);
+  const currentIst = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+  const queryFromDate = from ?? `${currentIst.slice(0, 8)}01`;
+  const queryToDate = to ?? currentIst;
+
+  const items = await Promise.all(
+    rows.rows.map(async (row: any) => {
+      const salCalc = await calculateEmployeeSalaryForPeriod(String(row.employee_id), queryFromDate, queryToDate);
+      const monthlySalary = salCalc.salaryRecord ? salCalc.salaryRecord.monthlySalary : 0;
+      const earnedSalary = salCalc.earnedSalary;
+      const advanceBalance = salCalc.advanceBalance;
+      const netPayable = salCalc.netPayableSalary;
+
+      return {
+        ...row,
+        monthly_salary: monthlySalary,
+        earned_salary: earnedSalary,
+        advance_balance: advanceBalance,
+        net_payable: netPayable,
+        monthlySalary,
+        earnedSalary,
+        advanceBalance,
+        netPayable,
+      };
+    }),
+  );
+
+  return result(items, Number(count.rows[0]?.total ?? 0), q, summary);
 }
+
 
 function deriveSessionStatusString(dayStatus: string, s?: Record<string, any>): string {
   if (!s) {
@@ -418,8 +446,32 @@ export async function employeeAttendanceDetail(employeeId: string, q: Query) {
     };
   });
 
-  return { ...result(items, Number(countRes.rows[0]?.total ?? 0), q, {}), summary, employee };
+  const currentIst = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+
+  const queryFromDate = from ?? `${currentIst.slice(0, 8)}01`;
+  const queryToDate = to ?? currentIst;
+
+  const salCalc = await calculateEmployeeSalaryForPeriod(employeeId, queryFromDate, queryToDate);
+
+  const salarySummary = {
+    monthlySalary: salCalc.salaryRecord ? salCalc.salaryRecord.monthlySalary : 0,
+    salaryBasis: "30 days",
+    salaryBasisDays: 30,
+    dailySalary: salCalc.dailySalaryRate,
+    presentSalaryDays: salCalc.presentSalaryDays,
+    absentSalaryDays: salCalc.absentSalaryDays,
+    absenceDeduction: salCalc.absenceDeduction,
+    earnedSalary: salCalc.earnedSalary,
+    advance: salCalc.advanceBalance,
+    advanceDeduction: salCalc.advanceBalance,
+    advanceBalance: salCalc.advanceBalance,
+    netPayable: salCalc.netPayableSalary,
+    isFullMonth: salCalc.isFullMonth,
+  };
+
+  return { ...result(items, Number(countRes.rows[0]?.total ?? 0), q, {}), summary, salarySummary, employee };
 }
+
 
 export async function payroll(q: Query) { const c:string[]=[]; const v:unknown[]=[]; filter(q,c,v,"p.year","year"); filter(q,c,v,"p.month","month"); filter(q,c,v,"p.id","periodId"); filter(q,c,v,"r.employee_id","employeeId"); filter(q,c,v,"r.status","status"); const where=c.length?`WHERE ${c.join(" AND ")}`:""; const {limit,offset}=paging(q); v.push(limit,offset); const sql=`SELECT e.name employee,r.employee_id,e.biometric_id::text biometric_id,r.salary_type,r.base_salary::text,r.gross_pay::text gross_salary,r.attendance_deduction::text,r.advance_recovery::text,r.other_deductions::text manual_deductions,(r.gross_pay-r.base_salary)::text additions,r.net_pay::text net_salary,r.status payroll_status,p.status period_status,pp.payment_method,pp.payment_date::text,pp.payment_reference FROM employee_payroll_records r JOIN payroll_periods p ON p.id=r.payroll_period_id JOIN employees e ON e.id=r.employee_id LEFT JOIN payroll_payments pp ON pp.payroll_record_id=r.id AND pp.status='PAID' ${where} ORDER BY p.year DESC,p.month DESC,e.name LIMIT $${v.length-1} OFFSET $${v.length}`; const [rows,count]=await Promise.all([pool.query(sql,v),pool.query<{total:string}>(`SELECT COUNT(*) total FROM employee_payroll_records r JOIN payroll_periods p ON p.id=r.payroll_period_id ${where}`,v.slice(0,-2))]); const summary=rows.rows.reduce((x:any,r:any)=>({employeeCount:x.employeeCount+1,grossTotal:x.grossTotal+Number(r.gross_salary),deductionTotal:x.deductionTotal+Number(r.attendance_deduction)+Number(r.manual_deductions),advanceRecoveryTotal:x.advanceRecoveryTotal+Number(r.advance_recovery),netTotal:x.netTotal+Number(r.net_salary),paidTotal:x.paidTotal+(r.payroll_status==='PAID'?Number(r.net_salary):0),pendingTotal:x.pendingTotal+(r.payroll_status==='PAID'?0:Number(r.net_salary))}),{employeeCount:0,grossTotal:0,deductionTotal:0,advanceRecoveryTotal:0,netTotal:0,paidTotal:0,pendingTotal:0}); return result(rows.rows,Number(count.rows[0]?.total??0),q,summary); }
 
