@@ -169,6 +169,7 @@ export default function PayrollDetail() {
                 <th className="px-6 py-4 text-right">Advance Recovery</th>
                 <th className="px-6 py-4 text-right">Net Pay</th>
                 <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-center">View</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -203,13 +204,24 @@ export default function PayrollDetail() {
                         {r.status}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-center">
+                      <Link
+                        href={`/payroll/records/${r.id}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-[#028174]/30 bg-teal-50 px-2.5 py-1 text-xs font-bold text-[#028174] hover:bg-teal-100 transition-colors"
+                      >
+                        View
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
+                    </td>
                   </tr>
                 );
               })}
 
               {records.length === 0 && (
                 <tr>
-                  <td colSpan={canReset ? 8 : 7} className="px-6 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={canReset ? 9 : 8} className="px-6 py-8 text-center text-sm text-slate-500">
                     No employee payroll records found for this period.
                   </td>
                 </tr>
@@ -224,7 +236,7 @@ export default function PayrollDetail() {
             const isChecked = selectedRecords.includes(r.id);
             const earnedSalary = Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0);
             return (
-              <div key={r.id} className={`p-4 space-y-2 ${isChecked ? "bg-teal-50/40" : ""}`}>
+              <div key={r.id} className={`p-4 space-y-2.5 ${isChecked ? "bg-teal-50/40" : ""}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     {canReset && (
@@ -267,9 +279,22 @@ export default function PayrollDetail() {
                     <span className="font-bold text-[#028174] text-sm">{inr(r.net_pay)}</span>
                   </div>
                 </div>
+
+                <div className="pt-1 flex justify-end">
+                  <Link
+                    href={`/payroll/records/${r.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-[#028174]/30 bg-teal-50 px-3 py-1.5 text-xs font-bold text-[#028174] hover:bg-teal-100 transition-colors"
+                  >
+                    View Payroll Record
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                </div>
               </div>
             );
           })}
+
 
 
           {records.length === 0 && (

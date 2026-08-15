@@ -73,24 +73,30 @@ export default function RecordDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Navigation & Actions */}
+      {/* Navigation & Header */}
       <div>
         <Link
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#028174] hover:underline mb-2"
-          href={`/payroll/${r.payroll_period_id}`}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#028174] hover:underline mb-3"
+          href={r.payroll_period_id ? `/payroll/${r.payroll_period_id}` : "/payroll"}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          Back to Period Overview
+          ← Back to Payroll
         </Link>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-4">
           <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Payroll Record</span>
+              <span className="rounded-full bg-teal-50 border border-teal-200 px-2.5 py-0.5 text-xs font-bold text-[#028174]">
+                Status: {r.period_status || r.status}
+              </span>
+            </div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              {r.employee_name} Payroll Record
+              {r.employee_name} <span className="text-slate-400 font-normal">—</span> <span className="font-mono text-xl font-semibold text-slate-700">{r.employee_code || `EMP-${r.employee_id}`}</span>
             </h1>
-            <p className="mt-0.5 text-xs text-slate-500 font-mono">
-              Record ID: {r.id}
+            <p className="mt-1 text-xs text-slate-600 font-medium">
+              Payroll Period: <strong>{r.period_month && r.period_year ? `${new Date(r.period_year, r.period_month - 1).toLocaleString("en-IN", { month: "long" })} ${r.period_year}` : `Period ID: ${r.payroll_period_id}`}</strong>
             </p>
           </div>
 
@@ -151,57 +157,48 @@ export default function RecordDetail() {
         </div>
       )}
 
-      {/* Financial Highlights Section */}
-      <section aria-label="Financial Breakdown" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Salary Base</span>
-          <div className="mt-1 text-base font-bold text-slate-900">
-            {r.salary_type} {inr(r.base_salary)}
-          </div>
+      {/* Salary Summary Card */}
+      <section aria-label="Salary Summary" className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
+        <div className="border-b border-slate-200/80 px-6 py-4 bg-slate-50/70">
+          <h2 className="text-base font-bold text-slate-900">Salary Summary</h2>
         </div>
-
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Gross Pay</span>
-          <div className="mt-1 text-base font-bold text-slate-900">{inr(r.gross_pay)}</div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Other Deductions</span>
-          <div className="mt-1 text-base font-bold text-rose-700">{inr(r.other_deductions)}</div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Advance Recovery</span>
-          <div className="mt-1 text-base font-bold text-amber-700">{inr(r.advance_recovery)}</div>
-        </div>
-
-        {/* Prominent Net Pay Card */}
-        <div className="rounded-2xl border-2 border-teal-500/80 bg-teal-50/50 p-5 shadow-xs sm:col-span-2 lg:col-span-2">
-          <span className="text-xs font-bold text-[#028174] uppercase tracking-wider block">Net Pay</span>
-          <div className="mt-1 text-2xl font-extrabold text-[#028174]">{inr(r.net_pay)}</div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Payment Status</span>
-          <div className="mt-1 text-sm font-bold text-slate-900">
-            {r.period_status === "APPROVED" ? "APPROVED — PAYMENT PENDING" : r.status}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Payment Method</span>
-          <div className="mt-1 text-sm font-semibold text-slate-900">{payments[0]?.payment_method || "—"}</div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Reference & Date</span>
-          <div className="mt-1 text-xs font-semibold text-slate-900">
-            {payments[0]?.payment_reference || "—"} ({date(payments[0]?.payment_date)})
+        <div className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-4">Item</th>
+                  <th className="py-3 px-4 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                <tr>
+                  <td className="py-3 px-4 text-slate-700">Monthly Salary</td>
+                  <td className="py-3 px-4 text-right text-slate-900 font-semibold">{inr(r.base_salary)}</td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 text-slate-700">Earned Salary</td>
+                  <td className="py-3 px-4 text-right text-slate-900 font-semibold">{inr(Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0))}</td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 text-slate-700">Absence Deduction</td>
+                  <td className="py-3 px-4 text-right text-rose-700 font-semibold">{Number(r.attendance_deduction ?? 0) > 0 ? `-${inr(r.attendance_deduction)}` : inr(0)}</td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 text-slate-700">Advance Recovery</td>
+                  <td className="py-3 px-4 text-right text-amber-700 font-semibold">{Number(r.advance_recovery ?? 0) > 0 ? `-${inr(r.advance_recovery)}` : inr(0)}</td>
+                </tr>
+                <tr className="bg-teal-50/60 font-bold border-t-2 border-teal-500">
+                  <td className="py-4 px-4 text-[#028174] text-base">Net Pay</td>
+                  <td className="py-4 px-4 text-right text-[#028174] text-xl font-extrabold">{inr(r.net_pay)}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
 
-      {/* Section 2: Salary Breakdown & Calculation Summary */}
+      {/* Salary Calculation Breakdown */}
       <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -232,7 +229,7 @@ export default function RecordDetail() {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-            <span className="text-slate-500 block">Present Salary Days</span>
+            <span className="text-slate-500 block">Payable Salary Days</span>
             <span className="text-sm font-bold text-emerald-700">{r.payable_days ?? 0}</span>
           </div>
 
@@ -247,7 +244,7 @@ export default function RecordDetail() {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-            <span className="text-slate-500 block">Absence Deduction</span>
+            <span className="text-slate-500 block">Attendance Deduction</span>
             <span className="text-sm font-bold text-rose-700">{Number(r.attendance_deduction ?? 0) > 0 ? `-${inr(r.attendance_deduction)}` : inr(0)}</span>
           </div>
 
@@ -268,14 +265,15 @@ export default function RecordDetail() {
         </div>
 
         <details className="mt-2 text-xs">
-          <summary className="cursor-pointer font-semibold text-slate-600 hover:text-slate-900">
-            View Calculation Metadata Details (JSON)
+          <summary className="cursor-pointer font-semibold text-slate-600 hover:text-slate-900 py-1">
+            Calculation Details ▾
           </summary>
           <pre className="mt-2 overflow-auto rounded-xl bg-slate-900 p-4 text-xs font-mono text-slate-100 max-h-48">
             {JSON.stringify(r.calculation_details, null, 2)}
           </pre>
         </details>
       </section>
+
 
 
       {/* Section 3: Deductions */}
