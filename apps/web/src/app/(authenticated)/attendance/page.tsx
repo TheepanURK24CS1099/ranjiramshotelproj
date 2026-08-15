@@ -550,10 +550,6 @@ export default function AttendancePage() {
                   <th className="p-3.5">Working Hours</th>
                   <th className="p-3.5">Note</th>
                   <th className="p-3.5">Status</th>
-                  <th className="p-3.5 text-right">Monthly Salary</th>
-                  <th className="p-3.5 text-right">Earned Salary</th>
-                  <th className="p-3.5 text-right">Advance</th>
-                  <th className="p-3.5 text-right">Net Payable</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -620,23 +616,11 @@ export default function AttendancePage() {
                             {formatAttendanceStatus(row.status)}
                           </span>
                         </td>
-                        <td className="p-3.5 text-right font-semibold text-slate-900">
-                          {`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(row.monthly_salary ?? row.monthlySalary ?? 0))}`}
-                        </td>
-                        <td className="p-3.5 text-right font-semibold text-slate-900">
-                          {`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(row.earned_salary ?? row.earnedSalary ?? 0))}`}
-                        </td>
-                        <td className="p-3.5 text-right font-semibold text-slate-900">
-                          {`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(row.advance_balance ?? row.advanceBalance ?? 0))}`}
-                        </td>
-                        <td className="p-3.5 text-right font-extrabold text-teal-800">
-                          {`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(row.net_payable ?? row.netPayable ?? 0))}`}
-                        </td>
                       </tr>
 
                       {row.session_records && row.session_records.length > 0 && (
                         <tr className="bg-slate-50/40">
-                          <td colSpan={role === "ADMIN" ? 18 : 17} className="px-6 py-3">
+                          <td colSpan={role === "ADMIN" ? 14 : 13} className="px-6 py-3">
                             <div className="text-xs font-bold text-slate-700 mb-2">
                               Sessions Breakdown ({row.session_records.length} session{row.session_records.length === 1 ? "" : "s"}):
                             </div>
@@ -672,7 +656,7 @@ export default function AttendancePage() {
 
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={role === "ADMIN" ? 18 : 17} className="p-8 text-center text-sm text-slate-500">
+                    <td colSpan={role === "ADMIN" ? 14 : 13} className="p-8 text-center text-sm text-slate-500">
                       No attendance records found for the selected criteria.
                     </td>
                   </tr>
@@ -752,24 +736,6 @@ export default function AttendancePage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#028174]/5 border border-[#028174]/20 p-3 text-xs">
-                    <div>
-                      <span className="text-slate-500 block">Monthly Salary:</span>
-                      <span className="font-semibold text-slate-900">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(row.monthly_salary ?? row.monthlySalary ?? 0))}`}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block">Earned Salary:</span>
-                      <span className="font-semibold text-slate-900">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(row.earned_salary ?? row.earnedSalary ?? 0))}`}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block">Advance:</span>
-                      <span className="font-semibold text-slate-900">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(row.advance_balance ?? row.advanceBalance ?? 0))}`}</span>
-                    </div>
-                    <div>
-                      <span className="text-[#028174] block font-bold">Net Payable:</span>
-                      <span className="font-extrabold text-teal-900">{`₹${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(row.net_payable ?? row.netPayable ?? 0))}`}</span>
-                    </div>
-                  </div>
 
                   {row.session_records && row.session_records.length > 0 && (
                     <div className="space-y-2 pt-1">
