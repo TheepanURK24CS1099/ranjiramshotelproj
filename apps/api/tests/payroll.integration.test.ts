@@ -12,6 +12,12 @@ describe("Phase 2D: Payroll Integration With Salary Calculator", () => {
   let bio: number;
 
   beforeAll(async () => {
+    await pool.query("DELETE FROM payroll_deductions WHERE payroll_record_id IN (SELECT id FROM employee_payroll_records WHERE payroll_period_id IN (SELECT id FROM payroll_periods WHERE year=2999))");
+    await pool.query("DELETE FROM employee_advance_transactions WHERE payroll_record_id IN (SELECT id FROM employee_payroll_records WHERE payroll_period_id IN (SELECT id FROM payroll_periods WHERE year=2999))");
+    await pool.query("DELETE FROM employee_payroll_records WHERE payroll_period_id IN (SELECT id FROM payroll_periods WHERE year=2999)");
+    await pool.query("UPDATE payroll_periods SET generated_by=NULL,approved_by=NULL,paid_by=NULL,locked_by=NULL WHERE year=2999");
+    await pool.query("DELETE FROM payroll_periods WHERE year=2999");
+
     adminId = (
       await pool.query(
         "INSERT INTO app_users(username, email, password_hash, role) VALUES($1, $2, 'hash', 'ADMIN') RETURNING id",
@@ -31,7 +37,7 @@ describe("Phase 2D: Payroll Integration With Salary Calculator", () => {
   afterAll(async () => {
     await pool.query("DELETE FROM payroll_deductions WHERE payroll_record_id IN (SELECT id FROM employee_payroll_records WHERE employee_id=$1)", [testEmpId]);
     await pool.query("DELETE FROM employee_advance_transactions WHERE employee_id=$1 OR employee_id IN (SELECT id FROM employees WHERE name LIKE $2)", [testEmpId, `%${marker}%`]);
-    await pool.query("DELETE FROM employee_payroll_records WHERE employee_id=$1", [testEmpId]);
+    await pool.query("DELETE FROM employee_payroll_records WHERE employee_id=$1 OR payroll_period_id IN (SELECT id FROM payroll_periods WHERE notes LIKE $2 OR year = 2999)", [testEmpId, `%${marker}%`]);
     await pool.query("DELETE FROM employee_salary_history WHERE employee_id=$1", [testEmpId]);
     await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [testEmpId]);
     await pool.query(
