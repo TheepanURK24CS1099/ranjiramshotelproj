@@ -109,7 +109,7 @@ export async function calculateEmployeeSalaryForPeriod(
   const primarySalary = salaryRecords[salaryRecords.length - 1] ?? null;
   const hasSalaryRevisions = salaryRecords.length > 1;
 
-  // 3. Query attendance records in full date range
+  // 3. Query attendance status counts for reporting
   const attRes = await pool.query<{ status: string; count: string; work: string }>(
     `SELECT status, count(*)::int AS count, COALESCE(SUM(working_minutes), 0)::int AS work
      FROM daily_attendance_records
@@ -147,12 +147,10 @@ export async function calculateEmployeeSalaryForPeriod(
     Math.floor((Date.parse(`${toDate}T00:00:00Z`) - Date.parse(`${joined}T00:00:00Z`)) / 86400000) + 1,
   );
 
-  // Present Salary Days: Present, Late, Early Exit, Late&Early Exit, Missing Punch, Checked-in, Checkout-missing, Weekly Off, Holiday = 1.0; Half Day = 0.5
-  const presentSalaryDays = present + late + earlyExit + lateAndEarlyExit + missingPunch + currentlyCheckedIn + checkOutMissing + weeklyOff + holiday + (halfDay * 0.5);
-  const derivedAbsent = Math.max(dbAbsent + (halfDay * 0.5), Math.max(0, eligibleCalendarDays - presentSalaryDays));
+  // Calculate shift-punch based payable salary days for the period
+  const { presentSalaryDays } = await calculatePayableSalaryDaysForPeriod(employeeId, joined, toDate);
+  const derivedAbsent = Math.max(0, eligibleCalendarDays - presentSalaryDays);
   const absentSalaryDays = derivedAbsent;
-
-
 
   const isFullMonth = isFullCalendarMonth(fromDate, toDate);
 
@@ -192,25 +190,10 @@ export async function calculateEmployeeSalaryForPeriod(
       const subEnd = sal.effective_to && sal.effective_to < toDate ? sal.effective_to : toDate;
       if (subStart > subEnd) continue;
 
-      const subAtt = await pool.query<{ status: string; count: string; work: string }>(
-        `SELECT status, count(*)::int AS count, COALESCE(SUM(working_minutes), 0)::int AS work
-         FROM daily_attendance_records
-         WHERE employee_id = $1 AND attendance_date BETWEEN $2::date AND $3::date
-         GROUP BY status`,
-        [employeeId, subStart, subEnd],
-      );
-
-      const subCounts: Record<string, number> = {};
-      let subWorkMins = 0;
-      for (const r of subAtt.rows) {
-        subCounts[r.status] = Number(r.count ?? 0);
-        subWorkMins += Number(r.work ?? 0);
-      }
-
-      const subPres = (subCounts.PRESENT ?? 0) + (subCounts.LATE ?? 0) + (subCounts.EARLY_EXIT ?? 0) + (subCounts.LATE_AND_EARLY_EXIT ?? 0) + (subCounts.MISSING_PUNCH ?? 0) + (subCounts.CURRENTLY_CHECKED_IN ?? 0) + (subCounts.CHECK_OUT_MISSING ?? 0) + (subCounts.WEEKLY_OFF ?? 0) + (subCounts.HOLIDAY ?? 0) + ((subCounts.HALF_DAY ?? 0) * 0.5);
-      const subRecorded = Object.values(subCounts).reduce((a, b) => a + b, 0);
+      const subRes = await calculatePayableSalaryDaysForPeriod(employeeId, subStart, subEnd);
+      const subPres = subRes.presentSalaryDays;
       const subDays = Math.max(0, Math.floor((Date.parse(`${subEnd}T00:00:00Z`) - Date.parse(`${subStart}T00:00:00Z`)) / 86400000) + 1);
-      const subAbs = Math.max(subCounts.ABSENT ?? 0, Math.max(0, subDays - subRecorded));
+      const subAbs = Math.max(0, subDays - subPres);
 
       const subMonthly = Number(sal.monthly_salary ?? 0);
       const subDaily = Number(sal.daily_rate ?? 0);
@@ -223,7 +206,7 @@ export async function calculateEmployeeSalaryForPeriod(
       } else if (sal.salary_type === "DAILY") {
         accumulatedEarned += subPres * subDaily;
       } else if (sal.salary_type === "HOURLY") {
-        accumulatedEarned += (subWorkMins / 60) * subHourly;
+        accumulatedEarned += (subRes.totalWorkMinutes / 60) * subHourly;
       }
     }
 
@@ -282,3 +265,161 @@ export async function calculateEmployeeSalaryForPeriod(
     hasSalaryRevisions,
   };
 }
+
+async function calculatePayableSalaryDaysForPeriod(
+  employeeId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<{ presentSalaryDays: number; totalWorkMinutes: number }> {
+  const shiftAssRes = await pool.query<{
+    effective_from: string;
+    effective_to: string | null;
+    shift_id: string;
+    session_count: number;
+  }>(
+    `SELECT 
+       esa.effective_from::text,
+       esa.effective_to::text,
+       s.id AS shift_id,
+       COALESCE(ss.session_count, 1)::int AS session_count
+     FROM employee_shift_assignments esa
+     JOIN shifts s ON s.id = esa.shift_id
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS session_count
+       FROM shift_sessions
+       WHERE shift_id = s.id AND active = true
+     ) ss ON true
+     WHERE esa.employee_id = $1
+       AND esa.effective_from <= $3::date
+       AND (esa.effective_to IS NULL OR esa.effective_to >= $2::date)
+     ORDER BY esa.effective_from DESC`,
+    [employeeId, fromDate, toDate],
+  );
+
+  const attRowsRes = await pool.query<{
+    attendance_date: string;
+    status: string;
+    working_minutes: number;
+    raw_punch_count: number;
+    first_raw_punch_id: number | null;
+    last_raw_punch_id: number | null;
+    session_records: any;
+  }>(
+    `SELECT 
+       attendance_date::text,
+       status,
+       working_minutes,
+       raw_punch_count,
+       first_raw_punch_id,
+       last_raw_punch_id,
+       session_records
+     FROM daily_attendance_records
+     WHERE employee_id = $1 AND attendance_date BETWEEN $2::date AND $3::date`,
+    [employeeId, fromDate, toDate],
+  );
+
+  const attMap = new Map<string, (typeof attRowsRes.rows)[0]>();
+  for (const row of attRowsRes.rows) {
+    attMap.set(row.attendance_date, row);
+  }
+
+  let presentSalaryDays = 0;
+  let totalWorkMinutes = 0;
+
+  const cur = new Date(`${fromDate}T00:00:00Z`);
+  const end = new Date(`${toDate}T00:00:00Z`);
+
+  while (cur <= end) {
+    const dateStr = cur.toISOString().slice(0, 10);
+    const att = attMap.get(dateStr);
+    if (att) {
+      totalWorkMinutes += Number(att.working_minutes ?? 0);
+    }
+
+    if (att?.status === "WEEKLY_OFF" || att?.status === "HOLIDAY") {
+      presentSalaryDays += 1.0;
+    } else if (att?.status === "HALF_DAY") {
+      presentSalaryDays += 0.5;
+    } else if (att?.status === "NO_SHIFT" || att?.status === "UNMATCHED") {
+      // 0.0 payable days
+    } else {
+      const assignment = shiftAssRes.rows.find(
+        (a) => a.effective_from <= dateStr && (!a.effective_to || a.effective_to >= dateStr),
+      );
+      const sessionCount = assignment ? Math.max(1, Number(assignment.session_count ?? 1)) : 1;
+
+      let sessions: any[] = [];
+      if (att?.session_records) {
+        if (Array.isArray(att.session_records)) {
+          sessions = att.session_records;
+        } else if (typeof att.session_records === "string") {
+          try {
+            sessions = JSON.parse(att.session_records);
+          } catch {
+            sessions = [];
+          }
+        }
+      }
+
+      if (sessionCount >= 2) {
+        // Two-shift employee
+        const s1 = sessions.find((s: any) => s.session_number === 1) ?? sessions[0];
+        const s2 = sessions.find((s: any) => s.session_number === 2) ?? sessions[1];
+
+        const s1HasPunch = Boolean(
+          s1 && (s1.punch_in_id != null || s1.punch_out_id != null || s1.punch_in_at != null || s1.punch_out_at != null),
+        );
+        const s2HasPunch = Boolean(
+          s2 && (s2.punch_in_id != null || s2.punch_out_id != null || s2.punch_in_at != null || s2.punch_out_at != null),
+        );
+
+        if (s1HasPunch || s2HasPunch) {
+          const dayPayable = (s1HasPunch ? 0.5 : 0.0) + (s2HasPunch ? 0.5 : 0.0);
+          presentSalaryDays += dayPayable;
+        } else {
+          // Fallback if session_records punch IDs are not populated
+          if (att?.status === "HALF_DAY") {
+            presentSalaryDays += 0.5;
+          } else if (
+            att?.status === "PRESENT" ||
+            att?.status === "LATE" ||
+            att?.status === "EARLY_EXIT" ||
+            att?.status === "LATE_AND_EARLY_EXIT" ||
+            att?.status === "MISSING_PUNCH" ||
+            att?.status === "CURRENTLY_CHECKED_IN"
+          ) {
+            presentSalaryDays += 1.0;
+          }
+        }
+      } else {
+        // Single-shift employee
+        if (att?.status === "HALF_DAY") {
+          presentSalaryDays += 0.5;
+        } else {
+          const hasSessionPunch = sessions.some(
+            (s: any) => s.punch_in_id != null || s.punch_out_id != null || s.punch_in_at != null || s.punch_out_at != null,
+          );
+          const hasRawPunch =
+            Number(att?.raw_punch_count ?? 0) > 0 ||
+            att?.first_raw_punch_id != null ||
+            att?.last_raw_punch_id != null;
+          const isPunchedStatus =
+            att?.status === "PRESENT" ||
+            att?.status === "LATE" ||
+            att?.status === "EARLY_EXIT" ||
+            att?.status === "LATE_AND_EARLY_EXIT" ||
+            att?.status === "MISSING_PUNCH" ||
+            att?.status === "CURRENTLY_CHECKED_IN";
+
+          const dayPayable = hasSessionPunch || hasRawPunch || isPunchedStatus ? 1.0 : 0.0;
+          presentSalaryDays += dayPayable;
+        }
+      }
+    }
+
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+
+  return { presentSalaryDays, totalWorkMinutes };
+}
+

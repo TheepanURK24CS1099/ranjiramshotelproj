@@ -198,4 +198,239 @@ describe("Salary Calculator Service (Phase 1 Refined)", () => {
     await pool.query("DELETE FROM employee_salary_history WHERE employee_id=$1", [revEmpId]);
     await pool.query("DELETE FROM employees WHERE id=$1", [revEmpId]);
   });
+
+  describe("Client Final Payroll Salary Rules (Shift-Punch Based)", () => {
+    let singleEmpId: string;
+    let splitEmpId: string;
+    let singleShiftId: string;
+    let splitShiftId: string;
+
+    beforeAll(async () => {
+      // 1. Single Shift Setup
+      const sShiftRes = await pool.query(
+        "INSERT INTO shifts(name, start_time, end_time, active) VALUES($1, '09:00', '18:00', true) RETURNING id",
+        [`${marker}-single-shift`],
+      );
+      singleShiftId = sShiftRes.rows[0].id;
+
+      const sEmpRes = await pool.query(
+        "INSERT INTO employees(biometric_id, name, joining_date, active) VALUES($1, $2, '2026-01-01', true) RETURNING id",
+        [crypto.randomInt(900000000, 999999999), `${marker}-single-emp`],
+      );
+      singleEmpId = sEmpRes.rows[0].id;
+
+      await pool.query(
+        "INSERT INTO employee_shift_assignments(employee_id, shift_id, effective_from) VALUES($1, $2, '2026-01-01')",
+        [singleEmpId, singleShiftId],
+      );
+      await pool.query(
+        "INSERT INTO employee_salary_history(employee_id, salary_type, monthly_salary, effective_from, active) VALUES($1, 'MONTHLY', 21000, '2026-01-01', true)",
+        [singleEmpId],
+      );
+
+      // 2. Split (Two-Shift) Setup
+      const spShiftRes = await pool.query(
+        "INSERT INTO shifts(name, start_time, end_time, active) VALUES($1, '06:00', '23:30', true) RETURNING id",
+        [`${marker}-split-shift`],
+      );
+      splitShiftId = spShiftRes.rows[0].id;
+
+      await pool.query(
+        "INSERT INTO shift_sessions(shift_id, session_number, start_time, end_time, active) VALUES($1, 1, '06:00', '14:00', true), ($1, 2, '19:00', '23:30', true)",
+        [splitShiftId],
+      );
+
+      const spEmpRes = await pool.query(
+        "INSERT INTO employees(biometric_id, name, joining_date, active) VALUES($1, $2, '2026-01-01', true) RETURNING id",
+        [crypto.randomInt(900000000, 999999999), `${marker}-split-emp`],
+      );
+      splitEmpId = spEmpRes.rows[0].id;
+
+      await pool.query(
+        "INSERT INTO employee_shift_assignments(employee_id, shift_id, effective_from) VALUES($1, $2, '2026-01-01')",
+        [splitEmpId, splitShiftId],
+      );
+      await pool.query(
+        "INSERT INTO employee_salary_history(employee_id, salary_type, monthly_salary, effective_from, active) VALUES($1, 'MONTHLY', 21000, '2026-01-01', true)",
+        [splitEmpId],
+      );
+    });
+
+    afterAll(async () => {
+      const empIds = [singleEmpId, splitEmpId].filter(Boolean);
+      if (empIds.length) {
+        await pool.query("DELETE FROM daily_attendance_records WHERE employee_id = ANY($1::uuid[])", [empIds]);
+        await pool.query("DELETE FROM employee_shift_assignments WHERE employee_id = ANY($1::uuid[])", [empIds]);
+        await pool.query("DELETE FROM employee_salary_history WHERE employee_id = ANY($1::uuid[])", [empIds]);
+        await pool.query("DELETE FROM employees WHERE id = ANY($1::uuid[])", [empIds]);
+      }
+      const shiftIds = [singleShiftId, splitShiftId].filter(Boolean);
+      if (shiftIds.length) {
+        await pool.query("DELETE FROM shift_sessions WHERE shift_id = ANY($1::uuid[])", [shiftIds]);
+        await pool.query("DELETE FROM shifts WHERE id = ANY($1::uuid[])", [shiftIds]);
+      }
+    });
+
+    it("1. Single shift + recognized punch -> 1.0 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [singleEmpId]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count, first_raw_punch_id)
+         VALUES($1, $2, 111111, '2026-08-01', 'PRESENT', 2, 1001)`,
+        [`${singleEmpId}-2026-08-01`, singleEmpId],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(singleEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(1.0);
+    });
+
+    it("2. Single shift + no recognized punch -> 0.0 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [singleEmpId]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count)
+         VALUES($1, $2, 111111, '2026-08-01', 'ABSENT', 0)`,
+        [`${singleEmpId}-2026-08-01`, singleEmpId],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(singleEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(0.0);
+    });
+
+    it("3. Single shift + punch but missing OUT -> 1.0 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [singleEmpId]);
+      const sessionRecords = JSON.stringify([
+        { session_number: 1, punch_in_id: 1001, punch_out_id: null, status: "MISSING_OUT" },
+      ]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count, first_raw_punch_id, session_records)
+         VALUES($1, $2, 111111, '2026-08-01', 'MISSING_PUNCH', 1, 1001, $3)`,
+        [`${singleEmpId}-2026-08-01`, singleEmpId, sessionRecords],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(singleEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(1.0);
+    });
+
+    it("4. Single shift + late punch -> 1.0 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [singleEmpId]);
+      const sessionRecords = JSON.stringify([
+        { session_number: 1, punch_in_id: 1001, punch_out_id: 1002, status: "LATE" },
+      ]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count, first_raw_punch_id, session_records)
+         VALUES($1, $2, 111111, '2026-08-01', 'LATE', 2, 1001, $3)`,
+        [`${singleEmpId}-2026-08-01`, singleEmpId, sessionRecords],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(singleEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(1.0);
+    });
+
+    it("5. Single shift + early exit -> 1.0 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [singleEmpId]);
+      const sessionRecords = JSON.stringify([
+        { session_number: 1, punch_in_id: 1001, punch_out_id: 1002, status: "EARLY_EXIT" },
+      ]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count, first_raw_punch_id, session_records)
+         VALUES($1, $2, 111111, '2026-08-01', 'EARLY_EXIT', 2, 1001, $3)`,
+        [`${singleEmpId}-2026-08-01`, singleEmpId, sessionRecords],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(singleEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(1.0);
+    });
+
+    it("6. Two shifts + both punched -> 1.0 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [splitEmpId]);
+      const sessionRecords = JSON.stringify([
+        { session_number: 1, punch_in_id: 2001, punch_out_id: 2002, status: "COMPLETED" },
+        { session_number: 2, punch_in_id: 2003, punch_out_id: 2004, status: "COMPLETED" },
+      ]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count, session_records)
+         VALUES($1, $2, 222222, '2026-08-01', 'PRESENT', 4, $3)`,
+        [`${splitEmpId}-2026-08-01`, splitEmpId, sessionRecords],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(splitEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(1.0);
+    });
+
+    it("7. Two shifts + only Shift 1 punched -> 0.5 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [splitEmpId]);
+      const sessionRecords = JSON.stringify([
+        { session_number: 1, punch_in_id: 2001, punch_out_id: 2002, status: "COMPLETED" },
+        { session_number: 2, punch_in_id: null, punch_out_id: null, status: "CHECK_IN_MISSING" },
+      ]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count, session_records)
+         VALUES($1, $2, 222222, '2026-08-01', 'HALF_DAY', 2, $3)`,
+        [`${splitEmpId}-2026-08-01`, splitEmpId, sessionRecords],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(splitEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(0.5);
+    });
+
+    it("8. Two shifts + only Shift 2 punched -> 0.5 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [splitEmpId]);
+      const sessionRecords = JSON.stringify([
+        { session_number: 1, punch_in_id: null, punch_out_id: null, status: "CHECK_IN_MISSING" },
+        { session_number: 2, punch_in_id: 2003, punch_out_id: 2004, status: "COMPLETED" },
+      ]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count, session_records)
+         VALUES($1, $2, 222222, '2026-08-01', 'HALF_DAY', 2, $3)`,
+        [`${splitEmpId}-2026-08-01`, splitEmpId, sessionRecords],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(splitEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(0.5);
+    });
+
+    it("9. Two shifts + neither punched -> 0.0 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [splitEmpId]);
+      const sessionRecords = JSON.stringify([
+        { session_number: 1, punch_in_id: null, punch_out_id: null, status: "CHECK_IN_MISSING" },
+        { session_number: 2, punch_in_id: null, punch_out_id: null, status: "CHECK_IN_MISSING" },
+      ]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count, session_records)
+         VALUES($1, $2, 222222, '2026-08-01', 'ABSENT', 0, $3)`,
+        [`${splitEmpId}-2026-08-01`, splitEmpId, sessionRecords],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(splitEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(0.0);
+    });
+
+    it("10. Two shifts + one shift missing OUT -> 0.5 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [splitEmpId]);
+      const sessionRecords = JSON.stringify([
+        { session_number: 1, punch_in_id: 2001, punch_out_id: null, status: "MISSING_OUT" },
+        { session_number: 2, punch_in_id: null, punch_out_id: null, status: "CHECK_IN_MISSING" },
+      ]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count, session_records)
+         VALUES($1, $2, 222222, '2026-08-01', 'MISSING_PUNCH', 1, $3)`,
+        [`${splitEmpId}-2026-08-01`, splitEmpId, sessionRecords],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(splitEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(0.5);
+    });
+
+    it("13. Weekly off -> 1.0 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [singleEmpId]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count)
+         VALUES($1, $2, 111111, '2026-08-01', 'WEEKLY_OFF', 0)`,
+        [`${singleEmpId}-2026-08-01`, singleEmpId],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(singleEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(1.0);
+    });
+
+    it("14. Holiday -> 1.0 payable day", async () => {
+      await pool.query("DELETE FROM daily_attendance_records WHERE employee_id=$1", [singleEmpId]);
+      await pool.query(
+        `INSERT INTO daily_attendance_records(attendance_key, employee_id, biometric_id, attendance_date, status, raw_punch_count)
+         VALUES($1, $2, 111111, '2026-08-01', 'HOLIDAY', 0)`,
+        [`${singleEmpId}-2026-08-01`, singleEmpId],
+      );
+      const res = await calculateEmployeeSalaryForPeriod(singleEmpId, "2026-08-01", "2026-08-01");
+      expect(res.presentSalaryDays).toBe(1.0);
+    });
+  });
 });
+
