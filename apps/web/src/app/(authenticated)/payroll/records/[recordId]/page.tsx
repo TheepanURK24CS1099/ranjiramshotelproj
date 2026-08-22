@@ -178,7 +178,7 @@ export default function RecordDetail() {
                 </tr>
                 <tr>
                   <td className="py-3 px-4 text-slate-700">Earned Salary</td>
-                  <td className="py-3 px-4 text-right text-slate-900 font-semibold">{inr(Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0))}</td>
+                  <td className="py-3 px-4 text-right text-slate-900 font-semibold">{inr(r.calculation_details?.earned_salary != null ? r.calculation_details.earned_salary : Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0))}</td>
                 </tr>
                 <tr>
                   <td className="py-3 px-4 text-slate-700">Absence Deduction</td>
@@ -250,7 +250,7 @@ export default function RecordDetail() {
 
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <span className="text-slate-500 block">Earned Salary</span>
-            <span className="text-sm font-bold text-slate-900">{inr(Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0))}</span>
+            <span className="text-sm font-bold text-slate-900">{inr(r.calculation_details?.earned_salary != null ? r.calculation_details.earned_salary : Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0))}</span>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">

@@ -175,7 +175,7 @@ export default function PayrollDetail() {
             <tbody className="divide-y divide-slate-100">
               {records.map((r) => {
                 const isChecked = selectedRecords.includes(r.id);
-                const earnedSalary = Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0);
+                const earnedSalary = r.calculation_details?.earned_salary != null ? Number(r.calculation_details.earned_salary) : Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0);
                 return (
                   <tr key={r.id} className={`transition-colors hover:bg-slate-50/60 ${isChecked ? "bg-teal-50/40" : ""}`}>
                     {canReset && (
@@ -234,7 +234,7 @@ export default function PayrollDetail() {
         <div className="block md:hidden divide-y divide-slate-100">
           {records.map((r) => {
             const isChecked = selectedRecords.includes(r.id);
-            const earnedSalary = Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0);
+            const earnedSalary = r.calculation_details?.earned_salary != null ? Number(r.calculation_details.earned_salary) : Number(r.gross_pay ?? 0) - Number(r.attendance_deduction ?? 0);
             return (
               <div key={r.id} className={`p-4 space-y-2.5 ${isChecked ? "bg-teal-50/40" : ""}`}>
                 <div className="flex items-start justify-between gap-2">

@@ -71,6 +71,8 @@ async function recalcRecord(p:{id:string;period_start:string;period_end:string;s
    daily_salary_rate: salCalc.dailySalaryRate,
    present_salary_days: salCalc.presentSalaryDays,
    absent_salary_days: salCalc.absentSalaryDays,
+   earned_salary: salCalc.earnedSalary,
+   absence_deduction: salCalc.absenceDeduction,
    is_full_month: salCalc.isFullMonth,
    has_salary_revisions: salCalc.hasSalaryRevisions,
    eligible_employment_days: salCalc.eligibleCalendarDays,
